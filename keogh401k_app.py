@@ -86,19 +86,25 @@ for period in range(total_periods + 1):
 df = pd.DataFrame(annual_data)
 df = df[df["Year"] <= years]
 
-# ── KPI Table ─────────────────────────────────────────────────────────────────
+# ── Simple KPI Table ──────────────────────────────────────────────────────────
 import pandas as pd
 
-# Prepare data
+# Convert values to strings manually
 kpi_data = {
     "Metric": ["💰 Ending Balance", "📥 Total Contributions", "📈 Total Earnings"],
-    "Amount": [f"${end_balance:,.0f}", f"${end_contrib:,.0f}", f"${end_earnings:,.0f}"]
+    "Amount": [
+        "$" + str(round(end_balance)),
+        "$" + str(round(end_contrib)),
+        "$" + str(round(end_earnings))
+    ]
 }
+
 kpi_df = pd.DataFrame(kpi_data)
 
 # Display as table
 st.markdown("### Summary Table")
 st.table(kpi_df)
+
 
 
 # ── Dynamic chart title (lowercase to match your style) ───────────────────────
