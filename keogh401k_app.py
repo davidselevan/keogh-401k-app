@@ -20,12 +20,15 @@ st.success("Access granted!")
 # ✅ Header image (make sure Image_2.png is in the same folder as this script)
 # 🔐 Password gate stays the same above this
 
-# Title + corner image in one row
-title_col, img_col = st.columns([0.85, 0.15])
+st.success("Access granted!")
+
+# Title and icon in one row (icon on the LEFT)
+img_col, title_col = st.columns([0.15, 0.85])
+with img_col:
+    st.image("Image_2.png", use_container_width=True)
 with title_col:
     st.title("Future Value Calculator for Keogh/401(k)")
-with img_col:
-    st.image("Image_2.png", use_column_width=True)
+
 
 
 
