@@ -52,7 +52,7 @@ df = df[df["Year"] <= years]
 chart_title = (
     f"Future Value Calculation for Keogh/401(k)\n"
     f"Assuming {annual_return*100:.1f}% Annual Return (Compounded Biweekly) Over {years} Years\n"
-    f"${init_contrib:,.0f}/year at Age {init_age}, Then ${second_contrib:,.0f}/year at Age {second_age} Until Age {ret_age}\n"
+    f"${init_contrib:,.0f}/year at Age {init_age}, then ${second_contrib:,.0f}/year at Age {second_age} until Age {ret_age}\n"
     f"(For Illustrative Purposes Only)"
 )
 
