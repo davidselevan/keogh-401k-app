@@ -49,7 +49,12 @@ df = pd.DataFrame(annual_data)
 df = df[df["Year"] <= years]
 
 # Dynamic chart title
-chart_title = f"Future value calculation for Keogh/401(k) assuming {annual_return*100:.1f}% (compounded biweekly) for {years} years (For illustrative purposes only)\nStarting with ${init_contrib:,.0f}/yr at age {init_age} then ${second_contrib:,.0f}/yr at age {second_age} until age {ret_age}"
+chart_title = (
+    f"Future Value Calculation for Keogh/401(k)\n"
+    f"Assuming {annual_return*100:.1f}% Annual Return (Compounded Biweekly) Over {years} Years\n"
+    f"Starting with ${init_contrib:,.0f}/year at Age {init_age}, Then ${second_contrib:,.0f}/year at Age {second_age} Until Age {ret_age}\n"
+    f"(For Illustrative Purposes Only)"
+)
 
 # Plot
 fig, ax = plt.subplots(figsize=(10, 6))
