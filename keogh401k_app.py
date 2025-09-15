@@ -50,11 +50,13 @@ df = df[df["Year"] <= years]
 
 # Dynamic chart title
 chart_title = (
-    f"Future Value Calculation for Keogh/401(k) "
-    f"Assuming {annual_return*100:.1f}% Annual Return (Compounded Biweekly) Over {years} Years "
-    f"${init_contrib:,.0f}/year at Age {init_age}, then ${second_contrib:,.0f}/year at Age {second_age} until Age {ret_age} "
-    f"(For Illustrative Purposes Only)"
+    f"Future Value Calculation for Keogh/401(k)\n"
+    f"Assuming {annual_return*100:.1f}% Return for {years} Years\n"
+    f"(For Illustrative Purposes Only)\n"
+    f"Starting with ${init_contrib:,.0f}/yr Contribution at Age {init_age},\n"
+    f"then ${second_contrib:,.0f}/yr Starting at Age {second_age} until Retirement at Age {ret_age}."
 )
+
 
 
 
