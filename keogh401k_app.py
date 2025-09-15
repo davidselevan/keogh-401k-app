@@ -24,7 +24,7 @@ second_contrib = st.sidebar.number_input("Second contribution amount (annual)", 
 second_age = st.sidebar.number_input("Second Start Age", init_age, 80, 50, 1)
 employer_match = st.sidebar.number_input("Employer match %", 0.0, 1.0, 0.0, 0.01)
 annual_return = st.sidebar.number_input("Annual Return Rate", 0.0, 0.20, 0.06, 0.01)
-ret_age = st.sidebar.number_input("Retirement Age", init_age+1, 100, 90, 1)
+ret_age = st.sidebar.number_input("Retirement Age", init_age+1, 100, 65, 1)
 
 # ✅ Compounding frequency dropdown
 frequency = st.sidebar.selectbox("Compounding Frequency", ["Biweekly", "Monthly", "Quarterly"])
