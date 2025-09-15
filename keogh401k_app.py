@@ -154,6 +154,21 @@ if not df.empty:
 plt.tight_layout()
 st.pyplot(fig)
 
+# ── Optional: Clickable Icon to Export Chart ──────────────────────────────────
+import base64
+
+# Convert chart buffer to base64
+buf.seek(0)
+img_base64 = base64.b64encode(buf.getvalue()).decode()
+
+# Display export icon as a clickable link
+st.markdown(f"""
+    <div style="text-align:center; margin-top:10px;">
+        <a href="data:image/png;base64,{img_base64}" download="keogh401k_chart.png" style="text-decoration:none;">
+            <span style="font-size:24px;">📤 Export Chart</span>
+        </a>
+    </div>
+""", unsafe_allow_html=True)
 
 # ── Export chart button (PNG) ────────────────────────────────────────────────
 buf = io.BytesIO()
