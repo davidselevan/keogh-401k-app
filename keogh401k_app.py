@@ -3,6 +3,22 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+# 🔐 Simple password gate
+st.title("Future Value Calculator for Keogh/401(k)")
+
+password = st.text_input("Enter password to access:", type="password")
+
+if password != "dad1234":
+    st.warning("Please enter the correct password to continue.")
+    st.stop()
+
+# ✅ Your app code goes below this line
+st.success("Access granted!")
+# ... rest of your Streamlit code
+
+
+
+
 st.set_page_config(page_title="Keogh/401(k) Projection", layout="wide")
 
 st.sidebar.title("401(k) Inputs")
