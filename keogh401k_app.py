@@ -86,18 +86,27 @@ for period in range(total_periods + 1):
 df = pd.DataFrame(annual_data)
 df = df[df["Year"] <= years]
 
-# ── KPI: show the end value (and related totals) ──────────────────────────────
+# ── KPI: show the end value (and related totals) in a modern box ──────────────
 end_balance = float(df["Total"].iloc[-1]) if not df.empty else 0.0
 end_contrib = float(df["Contributions"].iloc[-1]) if not df.empty else 0.0
 end_earnings = float(df["Earnings"].iloc[-1]) if not df.empty else 0.0
 
-kpi1, kpi2, kpi3 = st.columns(3)
-with kpi1:
-    st.metric(label="💰 Ending Balance", value=f"${end_balance:,.0f}")
-with kpi2:
-    st.metric(label="📥 Total Contributions", value=f"${end_contrib:,.0f}")
-with kpi3:
-    st.metric(label="📈 Total Earnings", value=f"${end_earnings:,.0f}")
+with st.container():
+    st.markdown("""
+        <div style="background-color:#f8f9fa; padding:20px; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.05); margin-bottom:20px;">
+            <div style="display:flex; justify-content:space-around;">
+    """, unsafe_allow_html=True)
+
+    kpi1, kpi2, kpi3 = st.columns(3)
+    with kpi1:
+        st.metric(label="💰 Ending Balance", value=f"${end_balance:,.0f}")
+    with kpi2:
+        st.metric(label="📥 Total Contributions", value=f"${end_contrib:,.0f}")
+    with kpi3:
+        st.metric(label="📈 Total Earnings", value=f"${end_earnings:,.0f}")
+
+    st.markdown("</div></div>", unsafe_allow_html=True)
+
 
 # ── Dynamic chart title (lowercase to match your style) ───────────────────────
 chart_title = (
