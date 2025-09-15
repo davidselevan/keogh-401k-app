@@ -84,9 +84,13 @@ ax.legend()
 ax.set_xticks(np.arange(0, years+1, max(1, years//10)))
 ax.ticklabel_format(style='plain', axis='y')
 ax.yaxis.set_major_formatter(mtick.StrMethodFormatter('${x:,.0f}'))  # ✅ Dollar formatting
-plt.tight_layout()
 
+# ✅ Add subtle horizontal grid lines
+ax.grid(axis='y', linestyle='--', alpha=0.4, color='gray')
+
+plt.tight_layout()
 st.pyplot(fig)
+
 
 # ✅ Export button
 buf = io.BytesIO()
