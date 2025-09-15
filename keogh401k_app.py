@@ -146,6 +146,11 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
+# ── Data Table ────────────────────────────────────────────────────────────────
+view_cols = ["Year", "Age", "Contributions", "Earnings", "Total"]
+table_df = df[view_cols].round(2)
+st.dataframe(table_df)
+
 # ── Export Table Button (Excel or CSV fallback) ───────────────────────────────
 try:
     import openpyxl
@@ -169,35 +174,3 @@ except Exception:
         mime="text/csv",
         key="download-table-csv-inline",
     )
-
-
-
-# ── Data Table ────────────────────────────────────────────────────────────────
-view_cols = ["Year", "Age", "Contributions", "Earnings", "Total"]
-table_df = df[view_cols].round(2)
-st.dataframe(table_df)
-
-# ── Download Table ────────────────────────────────────────────────────────────
-try:
-    import openpyxl
-    xlsx_buf = io.BytesIO()
-    with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as writer:
-        table_df.to_excel(writer, index=False, sheet_name="Projection")
-    xlsx_buf.seek(0)
-    st.download_button(
-        "Download Table (Excel)",
-        data=xlsx_buf.getvalue(),
-        file_name="keogh401k_table.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="download-table-xlsx",
-    )
-except Exception:
-    csv_data = table_df.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(
-        "Download Table (CSV)",
-        data=csv_data,
-        file_name="keogh401k_table.csv",
-        mime="text/csv",
-        key="download-table-csv",
-    )
-    st.caption("Excel export unavailable. Add 'openpyxl' to requirements.txt to enable Excel downloads.")
