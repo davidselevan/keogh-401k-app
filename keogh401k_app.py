@@ -86,25 +86,34 @@ for period in range(total_periods + 1):
 df = pd.DataFrame(annual_data)
 df = df[df["Year"] <= years]
 
-# ── Compact Stylized KPI Box ──────────────────────────────────────────────────
+# ── Compact KPI Table in a Centered Box ───────────────────────────────────────
+import pandas as pd
+
 end_balance = float(df["Total"].iloc[-1]) if not df.empty else 0.0
 end_contrib = float(df["Contributions"].iloc[-1]) if not df.empty else 0.0
 end_earnings = float(df["Earnings"].iloc[-1]) if not df.empty else 0.0
 
+# Prepare data
+kpi_data = {
+    "Metric": ["💰 Ending Balance", "📥 Total Contributions", "📈 Total Earnings"],
+    "Amount": [
+        "$" + str(round(end_balance)),
+        "$" + str(round(end_contrib)),
+        "$" + str(round(end_earnings))
+    ]
+}
+kpi_df = pd.DataFrame(kpi_data)
+
+# Display in a styled box
 st.markdown("""
-    <div style="background-color:#f8f9fa; padding:20px; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.05); margin-bottom:20px;">
-        <div style="display:flex; justify-content:space-evenly; gap:20px;">
-""", unsafe_allow_html=True)
+    <div style="background-color:#f8f9fa; padding:20px; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.05); width:60%; margin:auto;">
+        <h4 style="text-align:center; margin-bottom:20px;">📊 Summary</h4>
+    """, unsafe_allow_html=True)
 
-col1, col2, col3 = st.columns([1, 1, 1])
-with col1:
-    st.metric(label="💰 Ending Balance", value=f"${end_balance:,.0f}")
-with col2:
-    st.metric(label="📥 Total Contributions", value=f"${end_contrib:,.0f}")
-with col3:
-    st.metric(label="📈 Total Earnings", value=f"${end_earnings:,.0f}")
+st.table(kpi_df)
 
-st.markdown("</div></div>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
+
 
 # ── Dynamic chart title (lowercase to match your style) ───────────────────────
 chart_title = (
