@@ -86,6 +86,18 @@ for period in range(total_periods + 1):
 df = pd.DataFrame(annual_data)
 df = df[df["Year"] <= years]
 
+# ── KPI: show the end value (and related totals) ──────────────────────────────
+end_balance = float(df["Total"].iloc[-1]) if not df.empty else 0.0
+end_contrib = float(df["Contributions"].iloc[-1]) if not df.empty else 0.0
+end_earnings = float(df["Earnings"].iloc[-1]) if not df.empty else 0.0
+
+kpi1, kpi2, kpi3 = st.columns(3)
+with kpi1:
+    st.metric(label="💰 Ending Balance", value=f"${end_balance:,.0f}")
+with kpi2:
+    st.metric(label="📥 Total Contributions", value=f"${end_contrib:,.0f}")
+with kpi3:
+    st.metric(label="📈 Total Earnings", value=f"${end_earnings:,.0f}")
 
 # ── Dynamic chart title (lowercase to match your style) ───────────────────────
 chart_title = (
