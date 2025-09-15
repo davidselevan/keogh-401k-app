@@ -115,10 +115,13 @@ ax.bar(df["Year"], df["Earnings"], bottom=df["Contributions"], color="#e41a1c", 
 
 ax.set_xlabel("Years Worked")
 ax.set_ylabel("Amount ($)")
-# If you see an error about 'wrap', remove wrap=True
 ax.set_title(chart_title, fontsize=11, wrap=True)
 ax.legend()
-ax.set_xticks(np.arange(0, years + 1, max(1, years // 10)))
+
+# ✅ Force label for each year
+ax.set_xticks(df["Year"])  # Show every year label
+ax.set_xticklabels(df["Year"])  # Ensure labels match ticks
+
 ax.ticklabel_format(style='plain', axis='y')
 ax.yaxis.set_major_formatter(mtick.StrMethodFormatter('${x:,.0f}'))  # ✅ Dollar formatting
 
@@ -128,11 +131,10 @@ ax.grid(axis='y', linestyle='--', alpha=0.4, color='gray')
 # ✅ Label the value at the end (annotate the last bar)
 if not df.empty:
     end_year = int(df["Year"].iloc[-1])
-    # Place label slightly above the top of the final stacked bar
     ax.annotate(
         f"${end_balance:,.0f}",
         xy=(end_year, end_balance),
-        xytext=(0, 8),  # vertical offset in points
+        xytext=(0, 8),
         textcoords="offset points",
         ha="center",
         va="bottom",
@@ -144,6 +146,7 @@ if not df.empty:
 
 plt.tight_layout()
 st.pyplot(fig)
+
 
 # ── Export chart button (PNG) ────────────────────────────────────────────────
 buf = io.BytesIO()
