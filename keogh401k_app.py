@@ -12,9 +12,10 @@ st.set_page_config(page_title="Keogh/401(k) Projection", layout="wide")
 st.title("Future Value Calculator for Keogh/401(k)")
 password = st.text_input("Enter password to access:", type="password")
 if password != "dad1234":
-    st.warning("Please enter the correct password to continue.")
+    st.warning("Please enter the correct password to continue.")a
     st.stop()
 st.success("Access granted!")
+st.image("Image_2.png", caption="Keogh/401(k) Illustration", use_column_width=True)
 
 # ✅ Sidebar inputs
 st.sidebar.title("401(k) Inputs")
