@@ -18,7 +18,15 @@ if password != "dad1234":
 st.success("Access granted!")
 
 # ✅ Header image (make sure Image_2.png is in the same folder as this script)
-st.image("Image_2.png", caption="Keogh/401(k) Illustration", use_column_width=True)
+# 🔐 Password gate stays the same above this
+
+# Title + corner image in one row
+title_col, img_col = st.columns([0.85, 0.15])
+with title_col:
+    st.title("Future Value Calculator for Keogh/401(k)")
+with img_col:
+    st.image("Image_2.png", use_column_width=True)
+
 
 
 # ✅ Sidebar inputs
