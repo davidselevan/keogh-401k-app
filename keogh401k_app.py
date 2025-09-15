@@ -135,16 +135,43 @@ buf = io.BytesIO()
 fig.savefig(buf, format="png")
 buf.seek(0)
 
-# ── Export Chart + Table Buttons (Icon + Button) ──────────────────────────────
+# ── Export Chart + Table Buttons (Side-by-Side) ───────────────────────────────
 img_base64 = base64.b64encode(buf.getvalue()).decode()
 
-st.markdown(f"""
-    <div style="text-align:center; margin-top:10px;">
-        <a href="data:image/png;base64,{img_base64}" download="keogh401k_chart.png" style="text-decoration:none; margin-right:20px;">
-            <span style="font-size:24px;">📤 Export Chart</span>
-        </a>
-    </div>
-""", unsafe_allow_html=True)
+col_chart, col_table = st.columns([1, 1])
+
+with col_chart:
+    st.markdown(f"""
+        <div style="text-align:center; margin-top:10px;">
+            <a href="data:image/png;base64,{img_base64}" download="keogh401k_chart.png" style="text-decoration:none;">
+                <span style="font-size:20px;">📤 Export Chart</span>
+            </a>
+        </div>
+    """, unsafe_allow_html=True)
+
+with col_table:
+    try:
+        import openpyxl
+        xlsx_buf = io.BytesIO()
+        with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Projection")
+        xlsx_buf.seek(0)
+        st.download_button(
+            "📄 Export Table (Excel)",
+            data=xlsx_buf.getvalue(),
+            file_name="keogh401k_table.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download-table-xlsx-inline",
+        )
+    except Exception:
+        csv_data = df.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            "📄 Export Table (CSV)",
+            data=csv_data,
+            file_name="keogh401k_table.csv",
+            mime="text/csv",
+            key="download-table-csv-inline",
+        )
 
 # ── Data Table ────────────────────────────────────────────────────────────────
 view_cols = ["Year", "Age", "Contributions", "Earnings", "Total"]
@@ -163,7 +190,7 @@ try:
         data=xlsx_buf.getvalue(),
         file_name="keogh401k_table.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="download-table-xlsx-inline",
+        key="download-table-xlsx-bottom",
     )
 except Exception:
     csv_data = table_df.to_csv(index=False).encode("utf-8-sig")
@@ -172,5 +199,5 @@ except Exception:
         data=csv_data,
         file_name="keogh401k_table.csv",
         mime="text/csv",
-        key="download-table-csv-inline",
+        key="download-table-csv-bottom",
     )
