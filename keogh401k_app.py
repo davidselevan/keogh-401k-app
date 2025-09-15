@@ -86,18 +86,33 @@ for period in range(total_periods + 1):
 df = pd.DataFrame(annual_data)
 df = df[df["Year"] <= years]
 
-# ── KPI: show the end value (and related totals) ──────────────────────────────
-end_balance = float(df["Total"].iloc[-1]) if not df.empty else 0.0
-end_contrib = float(df["Contributions"].iloc[-1]) if not df.empty else 0.0
-end_earnings = float(df["Earnings"].iloc[-1]) if not df.empty else 0.0
-
+# ── Stylized KPI Boxes ────────────────────────────────────────────────────────
 k1, k2, k3 = st.columns(3)
+
 with k1:
-    st.metric("Ending balance", f"${end_balance:,.0f}")
+    st.markdown(f"""
+        <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+            <h4 style="margin-bottom:10px; color:#333;">Ending Balance</h4>
+            <p style="font-size:24px; font-weight:bold; color:#2c7be5;">${end_balance:,.0f}</p>
+        </div>
+    """, unsafe_allow_html=True)
+
 with k2:
-    st.metric("Total contributions", f"${end_contrib:,.0f}")
+    st.markdown(f"""
+        <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+            <h4 style="margin-bottom:10px; color:#333;">Total Contributions</h4>
+            <p style="font-size:24px; font-weight:bold; color:#28a745;">${end_contrib:,.0f}</p>
+        </div>
+    """, unsafe_allow_html=True)
+
 with k3:
-    st.metric("Total earnings", f"${end_earnings:,.0f}")
+    st.markdown(f"""
+        <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+            <h4 style="margin-bottom:10px; color:#333;">Total Earnings</h4>
+            <p style="font-size:24px; font-weight:bold; color:#e83e8c;">${end_earnings:,.0f}</p>
+        </div>
+    """, unsafe_allow_html=True)
+
 
 # ── Dynamic chart title (lowercase to match your style) ───────────────────────
 chart_title = (
