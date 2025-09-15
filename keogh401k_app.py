@@ -43,8 +43,8 @@ annual_return = st.sidebar.number_input("Annual Return Rate", 0.0, 0.20, 0.06, 0
 ret_age = st.sidebar.number_input("Retirement Age", init_age+1, 100, 65, 1)
 
 # ✅ Compounding frequency dropdown
-frequency = st.sidebar.selectbox("Compounding Frequency", ["Biweekly", "Monthly", "Quarterly"])
-periods_per_year = {"Biweekly": 26, "Monthly": 12, "Quarterly": 4}[frequency]
+frequency = st.sidebar.selectbox("Compounding Frequency", ["biweekly", "monthly", "quarterly"])
+periods_per_year = {"biweekly": 26, "monthly": 12, "quarterly": 4}[frequency]
 rate_per_period = (1 + annual_return) ** (1 / periods_per_year) - 1
 
 years = int(ret_age - init_age)
@@ -83,7 +83,7 @@ df = df[df["Year"] <= years]
 # ✅ Dynamic chart title
 chart_title = (
     f"Future value calculation for Keogh/401(k)\n"
-    f"assuming {annual_return*100:.1f}% return (Compounded {frequency}) for {years} years\n"
+    f"assuming {annual_return*100:.1f}% return (compounded {frequency}) for {years} years\n"
     f"(For illustrative purposes only)\n"
     f"Starting with ${init_contrib:,.0f}/yr contribution at age {init_age},\n"
     f"then ${second_contrib:,.0f}/yr starting at age {second_age} until retirement at age {ret_age}."
