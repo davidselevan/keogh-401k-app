@@ -162,6 +162,25 @@ buf.seek(0)
 img_base64 = base64.b64encode(buf.getvalue()).decode()
 
 # Display export icon as a clickable link
+import base64
+import io
+
+# ── Save chart to buffer ──────────────────────────────────────────────────────
+buf = io.BytesIO()
+fig.savefig(buf, format="png")
+buf.seek(0)
+
+# ── Standard download button ──────────────────────────────────────────────────
+st.download_button(
+    "Export Chart as PNG",
+    buf.getvalue(),
+    file_name="keogh401k_chart.png",
+    mime="image/png"
+)
+
+# ── Optional: Clickable icon to export chart ──────────────────────────────────
+img_base64 = base64.b64encode(buf.getvalue()).decode()
+
 st.markdown(f"""
     <div style="text-align:center; margin-top:10px;">
         <a href="data:image/png;base64,{img_base64}" download="keogh401k_chart.png" style="text-decoration:none;">
