@@ -84,11 +84,16 @@ kpi_data = {
 kpi_df = pd.DataFrame(kpi_data)
 
 st.markdown("""
-    <div style="background-color:#f8f9fa; padding:20px; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.05); width:60%; margin:auto;">
-        <h4 style="text-align:center; margin-bottom:20px;">📊 Summary</h4>
+    <div style="background-color:#f8f9fa; padding:20px; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.05); width:80%; margin:auto; text-align:center;">
+        <h4 style="margin-bottom:20px;">📊 Summary</h4>
+    </div>
 """, unsafe_allow_html=True)
-st.table(kpi_df)
-st.markdown("</div>", unsafe_allow_html=True)
+
+col1, col2, col3 = st.columns(3)
+col1.metric("💰 Ending Balance", f"${end_balance:,.0f}")
+col2.metric("📥 Contributions", f"${end_contrib:,.0f}")
+col3.metric("📈 Earnings", f"${end_earnings:,.0f}")
+
 
 # ── Chart ─────────────────────────────────────────────────────────────────────
 chart_title = (
