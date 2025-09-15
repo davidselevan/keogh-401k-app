@@ -93,7 +93,7 @@ with k1:
     st.markdown(f"""
         <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
             <h4 style="margin-bottom:10px; color:#333;">Ending Balance</h4>
-            <p style="font-size:24px; font-weight:bold; color:#2c7be5;">${end_balance:,.0f}</p>
+            <p style="font-size:24px; font-weight:bold; color:#2c7be5;">{"${:,.0f}".format(end_balance)}</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -101,7 +101,7 @@ with k2:
     st.markdown(f"""
         <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
             <h4 style="margin-bottom:10px; color:#333;">Total Contributions</h4>
-            <p style="font-size:24px; font-weight:bold; color:#28a745;">${end_contrib:,.0f}</p>
+            <p style="font-size:24px; font-weight:bold; color:#28a745;">{"${:,.0f}".format(end_contrib)}</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -109,10 +109,9 @@ with k3:
     st.markdown(f"""
         <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
             <h4 style="margin-bottom:10px; color:#333;">Total Earnings</h4>
-            <p style="font-size:24px; font-weight:bold; color:#e83e8c;">${end_earnings:,.0f}</p>
+            <p style="font-size:24px; font-weight:bold; color:#e83e8c;">{"${:,.0f}".format(end_earnings)}</p>
         </div>
     """, unsafe_allow_html=True)
-
 
 # ── Dynamic chart title (lowercase to match your style) ───────────────────────
 chart_title = (
