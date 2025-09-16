@@ -36,11 +36,24 @@ theme = st.sidebar.radio(
 )
 
 # Projector-optimized color schemes (labeled)
+# ── Color Scheme Dropdown ─────────────────────────────────────────────────────
 color_schemes = {
+    # Original sets
+    "Blues": ("#377eb8", "#4daf4a"),
+    "Grays": ("#999999", "#666666"),
+    "Red & Blue": ("#e41a1c", "#377eb8"),
+    "Purples": ("#984ea3", "#7570b3"),
+    "Orange & Teal": ("#ff7f00", "#1b9e77"),
+
+    # Projector-optimized sets
     "Blue & Orange (good for projectors)": ("#377eb8", "#ff7f00"),
     "Teal & Purple (good for projectors)": ("#1b9e77", "#984ea3"),
     "Blue & Gray (good for projectors)": ("#377eb8", "#666666"),
 }
+
+selected_scheme = st.sidebar.selectbox("Select Color Scheme", list(color_schemes.keys()))
+contrib_color, earnings_color = color_schemes[selected_scheme]
+
 selected_scheme = st.sidebar.selectbox("Select Color Scheme", list(color_schemes.keys()))
 contrib_color, earnings_color = color_schemes[selected_scheme]
 
