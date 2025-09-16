@@ -38,10 +38,21 @@ frequency = st.sidebar.selectbox("Compounding Frequency", ["biweekly", "monthly"
 periods_per_year = {"biweekly": 26, "monthly": 12, "quarterly": 4}[frequency]
 rate_per_period = (1 + annual_return) ** (1 / periods_per_year) - 1
 
+# ── Color Scheme Dropdown ─────────────────────────────────────────────────────
+color_schemes = {
+    "Blues": ("#377eb8", "#4daf4a"),       # Blue + Green
+    "Grays": ("#999999", "#666666"),       # Light Gray + Dark Gray
+    "Red & Blue": ("#e41a1c", "#377eb8"),  # Red + Blue
+    "Purples": ("#984ea3", "#7570b3"),     # Purple tones
+    "Orange & Teal": ("#ff7f00", "#1b9e77")# Orange + Teal
+}
+selected_scheme = st.sidebar.selectbox("Select Color Scheme", list(color_schemes.keys()))
+contrib_color, earnings_color = color_schemes[selected_scheme]
+
+# ── Projection calculation ────────────────────────────────────────────────────
 years = int(ret_age - init_age)
 total_periods = years * periods_per_year
 
-# ── Projection calculation ────────────────────────────────────────────────────
 balance = 0.0
 cum_contrib = 0.0
 cum_earnings = 0.0
@@ -68,32 +79,15 @@ for period in range(total_periods + 1):
 df = pd.DataFrame(annual_data)
 df = df[df["Year"] <= years]
 
-# ── KPI Table in a Box ────────────────────────────────────────────────────────
+# ── KPI Table ────────────────────────────────────────────────────────────────
 end_balance = float(df["Total"].iloc[-1]) if not df.empty else 0.0
 end_contrib = float(df["Contributions"].iloc[-1]) if not df.empty else 0.0
 end_earnings = float(df["Earnings"].iloc[-1]) if not df.empty else 0.0
-
-kpi_data = {
-    "Metric": ["💰 Ending Balance", "📥 Total Contributions", "📈 Total Earnings"],
-    "Amount": [
-        "$" + str(round(end_balance)),
-        "$" + str(round(end_contrib)),
-        "$" + str(round(end_earnings))
-    ]
-}
-kpi_df = pd.DataFrame(kpi_data)
-
-st.markdown("""
-    <div style="background-color:#f8f9fa; padding:20px; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.05); width:80%; margin:auto; text-align:center;">
-        <h4 style="margin-bottom:20px;">📊 Summary</h4>
-    </div>
-""", unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns(3)
 col1.metric("💰 Ending Balance", f"${end_balance:,.0f}")
 col2.metric("📥 Contributions", f"${end_contrib:,.0f}")
 col3.metric("📈 Earnings", f"${end_earnings:,.0f}")
-
 
 # ── Chart ─────────────────────────────────────────────────────────────────────
 chart_title = (
@@ -105,8 +99,8 @@ chart_title = (
 )
 
 fig, ax = plt.subplots(figsize=(10, 6))
-ax.bar(df["Year"], df["Contributions"], color="#377eb8", label="Contributions")
-ax.bar(df["Year"], df["Earnings"], bottom=df["Contributions"], color="#e41a1c", label="Earnings")
+ax.bar(df["Year"], df["Contributions"], color=contrib_color, label="Contributions")
+ax.bar(df["Year"], df["Earnings"], bottom=df["Contributions"], color=earnings_color, label="Earnings")
 ax.set_xlabel("Years Worked")
 ax.set_ylabel("Amount ($)")
 ax.set_title(chart_title, fontsize=11, wrap=True)
@@ -135,16 +129,13 @@ if not df.empty:
 plt.tight_layout()
 st.pyplot(fig)
 
-# ── Save chart to buffer ──────────────────────────────────────────────────────
+# ── Export Chart and Table ────────────────────────────────────────────────────
 buf = io.BytesIO()
 fig.savefig(buf, format="png")
 buf.seek(0)
-
-# ── Export Chart + Table Buttons (Side-by-Side) ───────────────────────────────
 img_base64 = base64.b64encode(buf.getvalue()).decode()
 
 col_chart, col_table = st.columns([1, 1])
-
 with col_chart:
     st.markdown(f"""
         <div style="text-align:center; margin-top:10px;">
@@ -182,27 +173,3 @@ with col_table:
 view_cols = ["Year", "Age", "Contributions", "Earnings", "Total"]
 table_df = df[view_cols].round(2)
 st.dataframe(table_df)
-
-# ── Export Table Button (Excel or CSV fallback) ───────────────────────────────
-try:
-    import openpyxl
-    xlsx_buf = io.BytesIO()
-    with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as writer:
-        table_df.to_excel(writer, index=False, sheet_name="Projection")
-    xlsx_buf.seek(0)
-    st.download_button(
-        "📄 Export Table (Excel)",
-        data=xlsx_buf.getvalue(),
-        file_name="keogh401k_table.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="download-table-xlsx-bottom",
-    )
-except Exception:
-    csv_data = table_df.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(
-        "📄 Export Table (CSV)",
-        data=csv_data,
-        file_name="keogh401k_table.csv",
-        mime="text/csv",
-        key="download-table-csv-bottom",
-    )
