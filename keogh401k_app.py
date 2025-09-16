@@ -24,30 +24,39 @@ with img_col:
 with title_col:
     st.title("Future Value Calculator for Keogh/401(k)")
 
-# ── Sidebar inputs ────────────────────────────────────────────────────────────
-st.sidebar.title("401(k) Inputs")
+# ── Sidebar: Theme + Inputs ───────────────────────────────────────────────────
+st.sidebar.title("Display & Inputs")
+
+# Projector-friendly theme toggle
+theme = st.sidebar.radio(
+    "Theme",
+    options=["Light (projector-friendly default)", "Dark (high-contrast)"],
+    index=0,
+    help="Light uses off-white backgrounds to reduce glare on projectors. Dark uses deep gray with bright accents."
+)
+
+# Projector-optimized color schemes (labeled)
+color_schemes = {
+    "Blue & Orange (good for projectors)": ("#377eb8", "#ff7f00"),
+    "Teal & Purple (good for projectors)": ("#1b9e77", "#984ea3"),
+    "Blue & Gray (good for projectors)": ("#377eb8", "#666666"),
+}
+selected_scheme = st.sidebar.selectbox("Select Color Scheme", list(color_schemes.keys()))
+contrib_color, earnings_color = color_schemes[selected_scheme]
+
+# 401(k) inputs
+st.sidebar.subheader("401(k) Inputs")
 init_contrib = st.sidebar.number_input("Initial contribution amount (annual)", 1000, 1_000_000, 50_000, 1_000)
 init_age = st.sidebar.number_input("Initial Start Age", 18, 80, 35, 1)
 second_contrib = st.sidebar.number_input("Second contribution amount (annual)", 1000, 1_000_000, 55_000, 1_000)
 second_age = st.sidebar.number_input("Second Start Age", init_age, 80, 50, 1)
-employer_match = st.sidebar.number_input("Employer match %", 0.0, 1.0, 0.0, 0.01)
-annual_return = st.sidebar.number_input("Annual Return Rate", 0.0, 0.20, 0.06, 0.01)
+employer_match = st.sidebar.number_input("Employer match % (0.00–1.00)", 0.0, 1.0, 0.0, 0.01)
+annual_return = st.sidebar.number_input("Annual Return Rate (0.00–0.20)", 0.0, 0.20, 0.06, 0.01)
 ret_age = st.sidebar.number_input("Retirement Age", min_value=init_age + 1, max_value=100, value=max(65, init_age + 1), step=1)
 
 frequency = st.sidebar.selectbox("Compounding Frequency", ["biweekly", "monthly", "quarterly"])
 periods_per_year = {"biweekly": 26, "monthly": 12, "quarterly": 4}[frequency]
 rate_per_period = (1 + annual_return) ** (1 / periods_per_year) - 1
-
-# ── Color Scheme Dropdown ─────────────────────────────────────────────────────
-color_schemes = {
-    "Blues": ("#377eb8", "#4daf4a"),       # Blue + Green
-    "Grays": ("#999999", "#666666"),       # Light Gray + Dark Gray
-    "Red & Blue": ("#e41a1c", "#377eb8"),  # Red + Blue
-    "Purples": ("#984ea3", "#7570b3"),     # Purple tones
-    "Orange & Teal": ("#ff7f00", "#1b9e77")# Orange + Teal
-}
-selected_scheme = st.sidebar.selectbox("Select Color Scheme", list(color_schemes.keys()))
-contrib_color, earnings_color = color_schemes[selected_scheme]
 
 # ── Projection calculation ────────────────────────────────────────────────────
 years = int(ret_age - init_age)
@@ -79,7 +88,7 @@ for period in range(total_periods + 1):
 df = pd.DataFrame(annual_data)
 df = df[df["Year"] <= years]
 
-# ── KPI Table ────────────────────────────────────────────────────────────────
+# ── KPI Metrics ───────────────────────────────────────────────────────────────
 end_balance = float(df["Total"].iloc[-1]) if not df.empty else 0.0
 end_contrib = float(df["Contributions"].iloc[-1]) if not df.empty else 0.0
 end_earnings = float(df["Earnings"].iloc[-1]) if not df.empty else 0.0
@@ -89,41 +98,87 @@ col1.metric("💰 Ending Balance", f"${end_balance:,.0f}")
 col2.metric("📥 Contributions", f"${end_contrib:,.0f}")
 col3.metric("📈 Earnings", f"${end_earnings:,.0f}")
 
+# ── Matplotlib theme helpers (projector-aware) ────────────────────────────────
+def mpl_palette(theme_name: str):
+    if "Dark" in theme_name:
+        return {
+            "fig_bg": "#111418",
+            "ax_bg": "#0c0f13",
+            "grid": "#3c4043",
+            "text": "#e8eaed",
+            "spine": "#8b949e",
+            "annot_fc": "#1b1f24",
+            "annot_ec": "#333333",
+        }
+    # Light (projector-friendly): off-white figure with white axes for contrast
+    return {
+        "fig_bg": "#f7f7f7",
+        "ax_bg": "#ffffff",
+        "grid": "#9aa0a6",
+        "text": "#222222",
+        "spine": "#666666",
+        "annot_fc": "#ffffff",
+        "annot_ec": "#cfcfcf",
+    }
+
+palette = mpl_palette(theme)
+
 # ── Chart ─────────────────────────────────────────────────────────────────────
 chart_title = (
     f"Future value calculation for Keogh/401(k)\n"
     f"assuming {annual_return*100:.1f}% return (compounded {frequency}) for {years} years\n"
     f"(For illustrative purposes only)\n"
-    f"Starting with ${init_contrib:,.0f}/yr contribution at age {init_age},\n"
+    f"Starting with ${init_contrib:,.0f}/yr contribution at age {init_age}, "
     f"then ${second_contrib:,.0f}/yr starting at age {second_age} until retirement at age {ret_age}."
 )
 
+# Apply text colors for readability
+plt.rcParams.update({
+    "axes.labelcolor": palette["text"],
+    "text.color": palette["text"],
+    "xtick.color": palette["text"],
+    "ytick.color": palette["text"],
+    "axes.titlecolor": palette["text"],
+    "axes.edgecolor": palette["spine"],
+})
+
 fig, ax = plt.subplots(figsize=(10, 6))
-ax.bar(df["Year"], df["Contributions"], color=contrib_color, label="Contributions")
-ax.bar(df["Year"], df["Earnings"], bottom=df["Contributions"], color=earnings_color, label="Earnings")
+fig.patch.set_facecolor(palette["fig_bg"])
+ax.set_facecolor(palette["ax_bg"])
+
+ax.bar(df["Year"], df["Contributions"], color=contrib_color, edgecolor="none", label="Contributions")
+ax.bar(df["Year"], df["Earnings"], bottom=df["Contributions"], color=earnings_color, edgecolor="none", label="Earnings")
+
 ax.set_xlabel("Years Worked")
 ax.set_ylabel("Amount ($)")
 ax.set_title(chart_title, fontsize=11, wrap=True)
-ax.legend()
+leg = ax.legend(frameon=True)
+leg.get_frame().set_facecolor(palette["ax_bg"])
+leg.get_frame().set_edgecolor(palette["spine"])
+
+# Axes cosmetics for projector visibility
+for spine in ax.spines.values():
+    spine.set_color(palette["spine"])
 ax.set_xticks(df["Year"])
 ax.set_xticklabels(df["Year"])
 ax.ticklabel_format(style='plain', axis='y')
 ax.yaxis.set_major_formatter(mtick.StrMethodFormatter('${x:,.0f}'))
-ax.grid(axis='y', linestyle='--', alpha=0.4, color='gray')
+ax.grid(axis='y', linestyle='--', alpha=0.6, color=palette["grid"])
 
+# Annotate ending balance
 if not df.empty:
     end_year = int(df["Year"].iloc[-1])
     ax.annotate(
         f"${end_balance:,.0f}",
         xy=(end_year, end_balance),
-        xytext=(0, 8),
+        xytext=(0, 10),
         textcoords="offset points",
         ha="center",
         va="bottom",
         fontsize=11,
         fontweight="bold",
-        color="#333",
-        bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="none", alpha=0.85)
+        color=palette["text"],
+        bbox=dict(boxstyle="round,pad=0.25", fc=palette["annot_fc"], ec=palette["annot_ec"], alpha=0.9)
     )
 
 plt.tight_layout()
@@ -131,7 +186,7 @@ st.pyplot(fig)
 
 # ── Export Chart and Table ────────────────────────────────────────────────────
 buf = io.BytesIO()
-fig.savefig(buf, format="png")
+fig.savefig(buf, format="png", facecolor=fig.get_facecolor(), bbox_inches="tight", dpi=200)
 buf.seek(0)
 img_base64 = base64.b64encode(buf.getvalue()).decode()
 
