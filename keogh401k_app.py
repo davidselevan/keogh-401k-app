@@ -6,12 +6,12 @@ import matplotlib.ticker as mtick
 import io
 import base64
 
-# ✅ Page config
+# ✅ Page config (must be first Streamlit call)
 st.set_page_config(page_title="Keogh/401(k) Projection", layout="wide")
 
 # ── Password gate ─────────────────────────────────────────────────────────────
 ALLOWED_PASSWORDS = {"dad1234", "Selevan123"}
-password = st.text_input("Enter password to access:", type="password")
+password = st.text_input("Enter password to access:", type="password", key="pwd_gate")
 if password not in ALLOWED_PASSWORDS:
     st.warning("Please enter the correct password to continue.")
     st.stop()
@@ -32,11 +32,11 @@ theme = st.sidebar.radio(
     "Theme",
     options=["Light (projector-friendly default)", "Dark (high-contrast)"],
     index=0,
-    help="Light uses off-white backgrounds to reduce glare on projectors. Dark uses deep gray with bright accents."
+    help="Light uses off-white backgrounds to reduce glare on projectors. Dark uses deep gray with bright accents.",
+    key="theme_mode",
 )
 
-# Projector-optimized color schemes (labeled)
-# ── Color Scheme Dropdown ─────────────────────────────────────────────────────
+# Color Scheme Dropdown (original + projector-optimized)
 color_schemes = {
     # Original sets
     "Blues": ("#377eb8", "#4daf4a"),
@@ -50,24 +50,40 @@ color_schemes = {
     "Teal & Purple (good for projectors)": ("#1b9e77", "#984ea3"),
     "Blue & Gray (good for projectors)": ("#377eb8", "#666666"),
 }
-
-selected_scheme = st.sidebar.selectbox("Select Color Scheme", list(color_schemes.keys()))
-contrib_color, earnings_color = color_schemes[selected_scheme]
-
-selected_scheme = st.sidebar.selectbox("Select Color Scheme", list(color_schemes.keys()))
+selected_scheme = st.sidebar.selectbox(
+    "Select Color Scheme",
+    list(color_schemes.keys()),
+    key="color_scheme",
+)
 contrib_color, earnings_color = color_schemes[selected_scheme]
 
 # 401(k) inputs
 st.sidebar.subheader("401(k) Inputs")
-init_contrib = st.sidebar.number_input("Initial contribution amount (annual)", 1000, 1_000_000, 50_000, 1_000)
-init_age = st.sidebar.number_input("Initial Start Age", 18, 80, 35, 1)
-second_contrib = st.sidebar.number_input("Second contribution amount (annual)", 1000, 1_000_000, 55_000, 1_000)
-second_age = st.sidebar.number_input("Second Start Age", init_age, 80, 50, 1)
-employer_match = st.sidebar.number_input("Employer match % (0.00–1.00)", 0.0, 1.0, 0.0, 0.01)
-annual_return = st.sidebar.number_input("Annual Return Rate (0.00–0.20)", 0.0, 0.20, 0.06, 0.01)
-ret_age = st.sidebar.number_input("Retirement Age", min_value=init_age + 1, max_value=100, value=max(65, init_age + 1), step=1)
-
-frequency = st.sidebar.selectbox("Compounding Frequency", ["biweekly", "monthly", "quarterly"])
+init_contrib = st.sidebar.number_input(
+    "Initial contribution amount (annual)", 1000, 1_000_000, 50_000, 1_000, key="init_contrib"
+)
+init_age = st.sidebar.number_input("Initial Start Age", 18, 80, 35, 1, key="init_age")
+second_contrib = st.sidebar.number_input(
+    "Second contribution amount (annual)", 1000, 1_000_000, 55_000, 1_000, key="second_contrib"
+)
+second_age = st.sidebar.number_input("Second Start Age", init_age, 80, 50, 1, key="second_age")
+employer_match = st.sidebar.number_input(
+    "Employer match % (0.00–1.00)", 0.0, 1.0, 0.0, 0.01, key="employer_match"
+)
+annual_return = st.sidebar.number_input(
+    "Annual Return Rate (0.00–0.20)", 0.0, 0.20, 0.06, 0.01, key="annual_return"
+)
+ret_age = st.sidebar.number_input(
+    "Retirement Age",
+    min_value=init_age + 1,
+    max_value=100,
+    value=max(65, init_age + 1),
+    step=1,
+    key="ret_age",
+)
+frequency = st.sidebar.selectbox(
+    "Compounding Frequency", ["biweekly", "monthly", "quarterly"], key="comp_freq"
+)
 periods_per_year = {"biweekly": 26, "monthly": 12, "quarterly": 4}[frequency]
 rate_per_period = (1 + annual_return) ** (1 / periods_per_year) - 1
 
