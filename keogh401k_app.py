@@ -4,22 +4,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 import io
-import base64
 
-# ✅ Page config (must be first Streamlit call)
+# ✅ Page config (must be the first Streamlit call)
 st.set_page_config(page_title="Keogh/401(k) Projection", layout="wide")
-
-# ── Password gate ─────────────────────────────────────────────────────────────
-ALLOWED_PASSWORDS = {"dad1234", "Selevan123"}
-password = st.text_input("Enter password to access:", type="password", key="pwd_gate")
-if password not in ALLOWED_PASSWORDS:
-    st.warning("Please enter the correct password to continue.")
-    st.stop()
-st.success("Access granted!")
 
 # ── Title and icon ────────────────────────────────────────────────────────────
 img_col, title_col = st.columns([0.15, 0.85])
 with img_col:
+    # Change to "Image_3.png" here if you switched the asset name
     st.image("Image_2.png", use_container_width=True)
 with title_col:
     st.title("Future Value Calculator for Keogh/401(k)")
@@ -75,9 +67,9 @@ annual_return = st.sidebar.number_input(
 )
 ret_age = st.sidebar.number_input(
     "Retirement Age",
-    min_value=init_age + 1,
+    min_value=int(init_age) + 1,
     max_value=100,
-    value=max(65, init_age + 1),
+    value=max(65, int(init_age) + 1),
     step=1,
     key="ret_age",
 )
@@ -86,6 +78,11 @@ frequency = st.sidebar.selectbox(
 )
 periods_per_year = {"biweekly": 26, "monthly": 12, "quarterly": 4}[frequency]
 rate_per_period = (1 + annual_return) ** (1 / periods_per_year) - 1
+
+# Guardrail: Second Start Age must be >= Initial Start Age
+if second_age < init_age:
+    st.error("Second Start Age cannot be before Initial Start Age. Please adjust in the sidebar.")
+    st.stop()
 
 # ── Projection calculation ────────────────────────────────────────────────────
 years = int(ret_age - init_age)
@@ -105,6 +102,8 @@ for period in range(total_periods + 1):
     balance += total_contrib + earnings
     cum_contrib += total_contrib
     cum_earnings += earnings
+
+    # capture at whole-year boundaries
     if period % periods_per_year == 0:
         annual_data.append({
             "Year": int(age - init_age),
@@ -152,16 +151,7 @@ def mpl_palette(theme_name: str):
 
 palette = mpl_palette(theme)
 
-# ── Chart ─────────────────────────────────────────────────────────────────────
-chart_title = (
-    f"Future value calculation for Keogh/401(k)\n"
-    f"assuming {annual_return*100:.1f}% return (compounded {frequency}) for {years} years\n"
-    f"(For illustrative purposes only)\n"
-    f"Starting with ${init_contrib:,.0f}/yr contribution at age {init_age}, "
-    f"then ${second_contrib:,.0f}/yr starting at age {second_age} until retirement at age {ret_age}."
-)
-
-# Apply text colors for readability
+# Apply text/axis colors for readability *before* plotting
 plt.rcParams.update({
     "axes.labelcolor": palette["text"],
     "text.color": palette["text"],
@@ -171,30 +161,57 @@ plt.rcParams.update({
     "axes.edgecolor": palette["spine"],
 })
 
+# ── Chart ─────────────────────────────────────────────────────────────────────
 fig, ax = plt.subplots(figsize=(10, 6))
 fig.patch.set_facecolor(palette["fig_bg"])
 ax.set_facecolor(palette["ax_bg"])
 
+# Stacked bars
 ax.bar(df["Year"], df["Contributions"], color=contrib_color, edgecolor="none", label="Contributions")
 ax.bar(df["Year"], df["Earnings"], bottom=df["Contributions"], color=earnings_color, edgecolor="none", label="Earnings")
 
+# Labels and grid
 ax.set_xlabel("Years Worked")
 ax.set_ylabel("Amount ($)")
-ax.set_title(chart_title, fontsize=11, wrap=True)
-leg = ax.legend(frameon=True)
-leg.get_frame().set_facecolor(palette["ax_bg"])
-leg.get_frame().set_edgecolor(palette["spine"])
-
-# Axes cosmetics for projector visibility
-for spine in ax.spines.values():
-    spine.set_color(palette["spine"])
-ax.set_xticks(df["Year"])
-ax.set_xticklabels(df["Year"])
+ax.set_title("Future Value Calculation", fontsize=11)
+ax.legend(frameon=True)
 ax.ticklabel_format(style='plain', axis='y')
 ax.yaxis.set_major_formatter(mtick.StrMethodFormatter('${x:,.0f}'))
 ax.grid(axis='y', linestyle='--', alpha=0.6, color=palette["grid"])
 
-# Annotate ending balance
+# ── Add Annotations for Key Ages ─────────────────────────────────────────────
+def add_arrow_for_age(target_age: int, label: str):
+    # Match the row for the exact age (Age is stored as integer years)
+    row = df.loc[df["Age"] == int(target_age)]
+    if row.empty:
+        return
+    x = int(row["Year"].iloc[0])
+    total = float(row["Total"].iloc[0])
+    contrib_amt = float(row["Contributions"].iloc[0])
+
+    ax.annotate(
+        f"{label}\nAge: {target_age}\nTotal: ${total:,.0f}\nContrib: ${contrib_amt:,.0f}",
+        xy=(x, total),                # point to top of stacked bar
+        xytext=(0, 24),               # place text slightly above the point
+        textcoords="offset points",
+        ha="center",
+        va="bottom",
+        fontsize=9,
+        color=palette["text"],
+        bbox=dict(boxstyle="round,pad=0.3", fc=palette["annot_fc"], ec=palette["annot_ec"]),
+        arrowprops=dict(arrowstyle="->", color=palette["text"], lw=1)
+    )
+
+# De-duplicate in case ages overlap
+seen = set()
+for age, label in [(int(init_age), "Initial Start"),
+                   (int(second_age), "Second Start"),
+                   (int(ret_age), "Retirement")]:
+    if age not in seen:
+        add_arrow_for_age(age, label)
+        seen.add(age)
+
+# Emphasize ending balance at the last year
 if not df.empty:
     end_year = int(df["Year"].iloc[-1])
     ax.annotate(
@@ -211,49 +228,50 @@ if not df.empty:
     )
 
 plt.tight_layout()
+
+# ── Export Chart (PNG) — show button above the chart ──────────────────────────
+png_buf = io.BytesIO()
+fig.savefig(png_buf, format="png", facecolor=fig.get_facecolor(), bbox_inches="tight", dpi=200)
+png_buf.seek(0)
+st.download_button(
+    "📷 Export Chart (PNG)",
+    data=png_buf.getvalue(),
+    file_name="keogh401k_chart.png",
+    mime="image/png",
+    key="download-chart-png",
+)
+
+# Render chart
 st.pyplot(fig)
 
-# ── Export Chart and Table ────────────────────────────────────────────────────
-buf = io.BytesIO()
-fig.savefig(buf, format="png", facecolor=fig.get_facecolor(), bbox_inches="tight", dpi=200)
-buf.seek(0)
-img_base64 = base64.b64encode(buf.getvalue()).decode()
+# Caption under chart
+st.caption("Created by David Selevan")
 
-col_chart, col_table = st.columns([1, 1])
-with col_chart:
-    st.markdown(f"""
-        <div style="text-align:center; margin-top:10px;">
-            <a href="data:image/png;base64,{img_base64}" download="keogh401k_chart.png" style="text-decoration:none;">
-                <span style="font-size:20px;">📤 Export Chart</span>
-            </a>
-        </div>
-    """, unsafe_allow_html=True)
-
-with col_table:
-    try:
-        import openpyxl
-        xlsx_buf = io.BytesIO()
-        with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as writer:
-            df.to_excel(writer, index=False, sheet_name="Projection")
-        xlsx_buf.seek(0)
-        st.download_button(
-            "📄 Export Table (Excel)",
-            data=xlsx_buf.getvalue(),
-            file_name="keogh401k_table.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key="download-table-xlsx-inline",
-        )
-    except Exception:
-        csv_data = df.to_csv(index=False).encode("utf-8-sig")
-        st.download_button(
-            "📄 Export Table (CSV)",
-            data=csv_data,
-            file_name="keogh401k_table.csv",
-            mime="text/csv",
-            key="download-table-csv-inline",
-        )
+# ── Export Table ──────────────────────────────────────────────────────────────
+# Try Excel; if engine not present in runtime, fall back to CSV
+try:
+    import openpyxl  # noqa: F401
+    xlsx_buf = io.BytesIO()
+    with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Projection")
+    xlsx_buf.seek(0)
+    st.download_button(
+        "📄 Export Table (Excel)",
+        data=xlsx_buf.getvalue(),
+        file_name="keogh401k_table.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="download-table-xlsx",
+    )
+except Exception:
+    csv_data = df.to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        "📄 Export Table (CSV)",
+        data=csv_data,
+        file_name="keogh401k_table.csv",
+        mime="text/csv",
+        key="download-table-csv",
+    )
 
 # ── Data Table ────────────────────────────────────────────────────────────────
 view_cols = ["Year", "Age", "Contributions", "Earnings", "Total"]
-table_df = df[view_cols].round(2)
-st.dataframe(table_df)
+st.dataframe(df[view_cols].round(2))
