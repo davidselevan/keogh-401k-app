@@ -12,7 +12,7 @@ st.set_page_config(page_title="Keogh/401(k) Projection", layout="wide")
 img_col, title_col = st.columns([0.15, 0.85])
 with img_col:
     # If you want to use Image_2.png instead, just change the file name here
-    st.image("Image_3.png", use_container_width=True)
+    st.image("Image_2.png", use_container_width=True)
 with title_col:
     st.title("Future Value Calculator for Keogh/401(k)")
 
