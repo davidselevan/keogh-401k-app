@@ -150,7 +150,7 @@ apply_irs_limit = st.sidebar.checkbox(
 )
 custom_physician_limit = st.sidebar.checkbox(
     "Use Custom Physician Limit Instead",
-    value=False,
+    value=True,
     help="Overrides IRS limit with a custom annual cap (e.g., for physicians).",
     key="custom_phys_limit"
 )
