@@ -69,6 +69,16 @@ use_second = st.sidebar.checkbox(
     key="use_second",
 )
 
+# 🔹 NEW: Contribution Mode Toggle (Fixed Dollar vs Percent of Salary)
+contrib_mode = st.sidebar.radio(
+    "Contribution Mode",
+    options=["Fixed Dollar Amount", "Percent of Salary"],
+    index=0,
+    help="Choose whether your contribution is a fixed annual $ amount or a % of salary.",
+    key="contrib_mode"
+)
+
+# Existing fixed-dollar inputs (kept exactly as-is)
 init_contrib = st.sidebar.number_input(
     "Initial contribution amount (annual)", 1000, 1_000_000, 50_000, 1_000, key="init_contrib"
 )
@@ -79,6 +89,35 @@ second_contrib = st.sidebar.number_input(
 )
 second_age_default = max(50, int(init_age))
 second_age = st.sidebar.number_input("Second Start Age", int(init_age), 80, second_age_default, 1, key="second_age")
+
+# 🔹 NEW: Percent-of-salary inputs (shown when mode is Percent of Salary)
+if contrib_mode == "Percent of Salary":
+    base_salary = st.sidebar.number_input(
+        "Current Salary",
+        min_value=10_000.0, max_value=1_000_000.0, value=120_000.0, step=1_000.0,
+        help="Used to compute contribution when in Percent of Salary mode.",
+        key="base_salary"
+    )
+    init_percent = st.sidebar.slider(
+        "Employee Contribution % (initial)",
+        0.0, 100.0, 10.0, 0.5, key="init_percent_pct"
+    )
+    second_percent = st.sidebar.slider(
+        "Employee Contribution % (second schedule)",
+        0.0, 100.0, 12.0, 0.5, key="second_percent_pct"
+    )
+    annual_raise = st.sidebar.slider(
+        "Annual Pay Increase %",
+        0.0, 10.0, 3.0, 0.1,
+        help="Applied to salary at the start of each plan year after Year 0.",
+        key="annual_raise_pct"
+    )
+else:
+    # Defaults when using Fixed Dollar Amount mode (no salary logic)
+    base_salary = 0.0
+    init_percent = None
+    second_percent = None
+    annual_raise = 0.0
 
 # RENAMED: Employer match → Employer contribution
 employer_contrib_rate = st.sidebar.number_input(
@@ -100,6 +139,37 @@ frequency = st.sidebar.selectbox(
 )
 periods_per_year = {"biweekly": 26, "monthly": 12, "quarterly": 4}[frequency]
 rate_per_period = (1 + annual_return) ** (1 / periods_per_year) - 1
+
+# 🔹 NEW: IRS elective deferral limit controls (+ custom physician limit)
+st.sidebar.markdown("---")
+apply_irs_limit = st.sidebar.checkbox(
+    "Apply IRS Elective Deferral Limit (cap employee contributions)",
+    value=True,
+    help="Caps employee contributions each year; employer contributions are not capped.",
+    key="apply_irs_limit"
+)
+custom_physician_limit = st.sidebar.checkbox(
+    "Use Custom Physician Limit Instead",
+    value=False,
+    help="Overrides IRS limit with a custom annual cap (e.g., for physicians).",
+    key="custom_phys_limit"
+)
+custom_limit_amount = 70000.0
+if custom_physician_limit and apply_irs_limit:
+    custom_limit_amount = st.sidebar.number_input(
+        "Custom Annual Limit ($)",
+        min_value=10_000.0, max_value=500_000.0,
+        value=70_000.0, step=1_000.0,
+        key="custom_limit_amount"
+    )
+
+with st.sidebar.expander("IRS Limit Settings"):
+    col1, col2 = st.columns(2)
+    base_year = int(col1.number_input("Base Year", 2000, 2100, 2024, 1, key="irs_base_year"))
+    inflation_rate = float(col2.number_input("Inflation %/yr", 0.0, 10.0, 0.0, 0.1, key="irs_inflation"))
+    col3, col4 = st.columns(2)
+    base_limit = float(col3.number_input("Base Limit ($)", 0.0, 200_000.0, 23_000.0, 500.0, key="irs_base_limit"))
+    catchup_limit = float(col4.number_input("Catch-up ($, 50+)", 0.0, 100_000.0, 7_500.0, 500.0, key="irs_catchup"))
 
 # Gentle reminder if user entered starting savings
 if current_savings > 0:
@@ -148,6 +218,19 @@ plt.rcParams.update({
     "axes.edgecolor": palette["spine"],
 })
 
+# 🔹 NEW: IRS helper
+def irs_limit(plan_year: int, age: int) -> float:
+    """
+    Returns the IRS elective deferral limit for a given plan year and age.
+    Applies a simple compounded inflation adjustment from base_year if inflation_rate > 0.
+    Includes catch-up only when age >= 50 during that year.
+    """
+    years_since_base = max(0, plan_year - base_year)
+    limit = base_limit * ((1 + inflation_rate / 100.0) ** years_since_base)
+    if age >= 50:
+        limit += catchup_limit
+    return float(limit)
+
 # ── Projection calculation ────────────────────────────────────────────────────
 years = int(ret_age - init_age)
 total_periods = years * periods_per_year
@@ -157,15 +240,44 @@ cum_contrib = 0.0
 cum_earnings = 0.0
 annual_data = []
 
+# 🔹 Percent-of-salary mode state
+salary = float(base_salary) if contrib_mode == "Percent of Salary" else 0.0
+employee_contrib_per_period = 0.0  # set at plan-year boundaries
+
 for period in range(total_periods + 1):
     age = init_age + period / periods_per_year
+    year_idx = int(age - init_age)
+    is_year_start = (period % periods_per_year == 0)
 
-    # Choose contribution schedule
-    contrib_annual = init_contrib if (not use_second or age < second_age) else second_contrib
-    employee_contrib = contrib_annual / periods_per_year
-    employer_amt = employee_contrib * employer_contrib_rate  # <-- employer contribution
-    total_contrib = employee_contrib + employer_amt
+    # 🔹 In Percent of Salary mode, apply annual raise at start of each new plan year (after Year 0)
+    if contrib_mode == "Percent of Salary" and is_year_start and period > 0:
+        salary *= (1 + (annual_raise / 100.0))
 
+    # Choose contribution schedule (initial vs second) and compute EMPLOYEE annual amount
+    if is_year_start:
+        if contrib_mode == "Percent of Salary":
+            pct = (second_percent if (use_second and age >= second_age) else init_percent) or 0.0
+            employee_annual = salary * (pct / 100.0)
+        else:
+            # Original fixed-dollar behavior
+            contrib_annual = init_contrib if (not use_second or age < second_age) else second_contrib
+            employee_annual = float(contrib_annual)
+
+        # 🔹 Apply contribution caps (employee portion only)
+        if apply_irs_limit:
+            if custom_physician_limit:
+                employee_annual = min(employee_annual, float(custom_limit_amount))
+            else:
+                employee_annual = min(employee_annual, irs_limit(base_year + year_idx, int(age)))
+
+        # Spread the employee amount across periods for this plan year
+        employee_contrib_per_period = employee_annual / periods_per_year
+
+    # Employer contribution based on this period's employee contribution
+    employer_amt = employee_contrib_per_period * employer_contrib_rate
+    total_contrib = employee_contrib_per_period + employer_amt
+
+    # Earnings on current balance
     earnings = balance * rate_per_period
 
     # Update balance and cumulative components
@@ -174,7 +286,7 @@ for period in range(total_periods + 1):
     cum_earnings += earnings
 
     # capture at whole-year boundaries
-    if period % periods_per_year == 0:
+    if is_year_start:
         annual_data.append({
             "Year": int(age - init_age),
             "Age": int(round(age)),
