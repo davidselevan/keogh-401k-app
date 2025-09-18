@@ -120,10 +120,12 @@ else:
 
 # Employer contribution rate
 employer_contrib_rate = st.sidebar.number_input(
-    "Employer contribution % (0.00–1.00)", 0.0, 1.0, 0.0, 0.01, key="employer_contrib_rate"
+    "Employer contribution % (0.00–1.00)", 0.0, 1.0, 0.0, 0.01, key="employer_contrib_rate",
+    help="Simplified model: employer adds this % on each employee contribution period."
 )
 annual_return = st.sidebar.number_input(
-    "Annual Return Rate (0.00–0.20)", 0.0, 0.20, 0.06, 0.01, key="annual_return"
+    "Annual Return Rate (0.00–0.20)", 0.0, 0.20, 0.06, 0.01, key="annual_return",
+    help="Nominal annual return; compounded at the frequency you select below."
 )
 ret_age = st.sidebar.number_input(
     "Retirement Age",
@@ -132,9 +134,11 @@ ret_age = st.sidebar.number_input(
     value=max(65, int(init_age) + 1),
     step=1,
     key="ret_age",
+    help="Projection ends at this age."
 )
 frequency = st.sidebar.selectbox(
-    "Compounding Frequency", ["biweekly", "monthly", "quarterly"], key="comp_freq"
+    "Compounding Frequency", ["biweekly", "monthly", "quarterly"], key="comp_freq",
+    help="Determines contribution/earnings accrual timing."
 )
 periods_per_year = {"biweekly": 26, "monthly": 12, "quarterly": 4}[frequency]
 rate_per_period = (1 + annual_return) ** (1 / periods_per_year) - 1
@@ -142,6 +146,15 @@ rate_per_period = (1 + annual_return) ** (1 / periods_per_year) - 1
 # ── IRS limits controls ───────────────────────────────────────────────────────
 st.sidebar.markdown("---")
 st.sidebar.subheader("IRS Limits")
+
+# Small hover chip under header (browser-native tooltip via HTML title attribute)
+st.sidebar.markdown(
+    '<div style="margin-top:-8px; color:#6b7280; font-size:12px;">'
+    '<span title="§402(g) caps employee deferrals; §415(c) caps total (employee regular + employer). Catch-up (age 50+) is extra and does not count toward §415(c).">'
+    'ⓘ Hover for a quick summary of IRS limits'
+    '</span></div>',
+    unsafe_allow_html=True
+)
 
 # Elective deferral (employee) limit
 apply_irs_limit = st.sidebar.checkbox(
@@ -153,7 +166,7 @@ apply_irs_limit = st.sidebar.checkbox(
 custom_physician_limit = st.sidebar.checkbox(
     "Use Custom Physician Limit Instead (employee cap)",
     value=True,
-    help="Overrides IRS elective deferral with a custom annual cap for employee contributions.",
+    help="Overrides §402(g) with a custom annual cap for employee contributions. Disables catch-up.",
     key="custom_phys_limit"
 )
 custom_limit_amount = 70000.0
@@ -162,7 +175,8 @@ if custom_physician_limit and apply_irs_limit:
         "Custom Employee Cap ($)",
         min_value=10_000.0, max_value=500_000.0,
         value=70_000.0, step=1_000.0,
-        key="custom_limit_amount"
+        key="custom_limit_amount",
+        help="Annual cap applied to employee contributions in place of §402(g)."
     )
 
 # Total contribution (employee regular + employer; catch-up not counted)
@@ -180,32 +194,68 @@ with st.sidebar.expander("IRS Limit Settings"):
         "Elective Limit Source",
         options=["Official Table", "Projection"],
         index=0,
-        help="Use official IRS values when available, otherwise projection.",
+        help="Use official IRS values when available (2020–2024 included here), otherwise project from a base year.",
         key="irs_mode_elective"
     )
     irs_mode_total = colm2.radio(
         "Total Limit Source",
         options=["Official Table", "Projection"],
         index=0,
-        help="Use official IRS values when available, otherwise projection.",
+        help="Use official IRS values when available (2020–2024 included here), otherwise project from a base year.",
         key="irs_mode_total"
     )
 
     # Shared projection parameters
     col1, col2 = st.columns(2)
-    base_year = int(col1.number_input("Projection Base Year", 2000, 2100, 2024, 1, key="irs_base_year"))
-    inflation_rate = float(col2.number_input("Projection Inflation %/yr", 0.0, 10.0, 0.0, 0.1, key="irs_inflation"))
+    base_year = int(col1.number_input(
+        "Projection Base Year", 2000, 2100, 2024, 1, key="irs_base_year",
+        help="Year from which projection growth is applied."
+    ))
+    inflation_rate = float(col2.number_input(
+        "Projection Inflation %/yr", 0.0, 10.0, 0.0, 0.1, key="irs_inflation",
+        help="Annual % used to grow limits beyond official table years."
+    ))
 
     # Projection anchors (editable) for elective + catch-up + total
     col3, col4 = st.columns(2)
-    base_limit_402g = float(col3.number_input("Elective Base ($)", 0.0, 200_000.0, 23_000.0, 500.0, key="irs_base_limit_402g"))
-    catchup_limit_402g = float(col4.number_input("Catch-up ($, 50+)", 0.0, 100_000.0, 7_500.0, 500.0, key="irs_catchup_402g"))
+    base_limit_402g = float(col3.number_input(
+        "Elective Base ($)", 0.0, 200_000.0, 23_000.0, 500.0, key="irs_base_limit_402g",
+        help="Base §402(g) elective limit at the base year."
+    ))
+    catchup_limit_402g = float(col4.number_input(
+        "Catch-up ($, 50+)", 0.0, 100_000.0, 7_500.0, 500.0, key="irs_catchup_402g",
+        help="Additional elective amount allowed at age 50+."
+    ))
 
     total_limit_415c_anchor = float(st.number_input(
         "Total Limit Anchor (§415(c)) ($)",
         min_value=10_000.0, max_value=500_000.0,
-        value=69_000.0, step=1_000.0, key="irs_total_anchor"
+        value=69_000.0, step=1_000.0, key="irs_total_anchor",
+        help="Base §415(c) total additions limit (employee REGULAR deferrals + employer) at the base year."
     ))
+
+# ✅ NEW: Expandable IRS description (like the other app)
+with st.sidebar.expander("ℹ️ About IRS Limits"):
+    st.markdown(
+        """
+**IRS Contribution Limits Overview**
+
+- **Elective Deferral Limit (§402(g))**  
+  The maximum **employee** contribution per year to a 401(k), 403(b), and similar plans.  
+  *2024 example*: **$23,000**. If you are **age 50+**, you may contribute an additional **catch‑up** (currently **$7,500**).
+
+- **Total Contribution Limit (§415(c))**  
+  The combined limit for **employee regular deferrals + employer contributions** (catch‑up **excluded** from this total).  
+  *2024 example*: **$69,000** (or **$76,500** when including catch‑up, since catch‑up is on top of §415(c)).
+
+This tool can:
+- Cap **employee** contributions based on §402(g) or your **custom cap**.
+- Cap **total additions** based on §415(c)**; catch‑up does not count toward this cap**.
+- Adjust the **effective employer rate** automatically to keep within §415(c) when needed.
+
+*For learning/illustration only — not financial advice.*
+        """
+    )
 
 # Gentle reminder if user entered starting savings
 if current_savings > 0:
