@@ -289,7 +289,7 @@ def add_callouts_vertical(points):
     # Recompute with final limits
     _, ymax = ax.get_ylim()
     min_above_abs = min_above_frac * ymax
-    text_gap_abs = max(text_gap_frac * ymax, 1e-9)
+    text_gap_abs = 0  # <-- Set gap to zero
 
     for p in points:
         x = float(p["x"])
