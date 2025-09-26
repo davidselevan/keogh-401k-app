@@ -42,7 +42,7 @@ starting_color = "#d1d5db" if "Light" in theme else "#4b5563"
 # 🔘 Toggle to show/hide milestone labels (callouts)
 show_callouts = st.sidebar.checkbox("Show milestone callouts (labels)", value=True)
 
-# ➕ Layout controls (lets you 'move' labels/legend without code edits)
+# ➕ Layout controls
 st.sidebar.markdown("### Chart Layout Controls")
 legend_position = st.sidebar.selectbox(
     "Legend position",
@@ -71,11 +71,9 @@ current_savings = st.sidebar.number_input(
     min_value=0.0, max_value=10_000_000.0, value=0.0, step=1_000.0
 )
 
-# 🔹 Contribution Mode Toggle — COMMENTED OUT (fixed-dollar only)
-# contrib_mode = st.sidebar.radio("Contribution Mode", ["Fixed Dollar Amount", "Percent of Salary"], index=0)
+# Fixed-dollar only (percent-of-salary disabled)
 contrib_mode = "Fixed Dollar Amount"
 
-# ▶▶ EXACT TWO-INPUT BOXES (per your spec)
 with st.sidebar.expander("Initial Contribution Schedule", expanded=True):
     init_age = st.number_input("Initial Start Age", 18, 80, 35, 1)
     init_contrib = st.number_input("Initial contribution amount", 1000, 1_000_000, 50_000, 1_000)
@@ -85,20 +83,7 @@ with st.sidebar.expander("Second Contribution Schedule", expanded=True):
     second_age = st.number_input("Second Start Age", int(init_age), 80, second_age_default, 1)
     second_contrib = st.number_input("Second contribution amount", 1000, 1_000_000, 55_000, 1_000)
 
-# Keep the toggle outside the boxes so each box contains exactly the two fields you wanted
 use_second = st.sidebar.checkbox("Use second contribution schedule", value=True)
-
-# Percent-of-salary inputs — ENTIRELY COMMENTED OUT (kept, not active)
-# if contrib_mode == "Percent of Salary":
-#     base_salary = st.sidebar.number_input("Current Salary", 10_000.0, 1_000_000.0, 120_000.0, 1_000.0)
-#     init_percent = st.sidebar.slider("Employee Contribution % (initial)", 0.0, 100.0, 10.0, 0.5)
-#     second_percent = st.sidebar.slider("Employee Contribution % (second schedule)", 0.0, 100.0, 12.0, 0.5)
-#     annual_raise = st.sidebar.slider("Annual Pay Increase %", 0.0, 10.0, 3.0, 0.1)
-# else:
-#     base_salary = 0.0
-#     init_percent = None
-#     second_percent = None
-#     annual_raise = 0.0
 
 # Employer contribution rate and returns
 employer_contrib_rate = st.sidebar.number_input("Employer contribution % (0.00–1.00)", 0.0, 1.0, 0.0, 0.01)
@@ -119,7 +104,7 @@ if use_second and second_age < init_age:
 
 # ── Projection calculation ────────────────────────────────────────────────────
 # Year 1 spans day 0–365. NO Year 0 row.
-years = int(ret_age - init_age)              # Year = 1..years
+years = int(ret_age - init_age)              # Year = 1..years inclusive
 total_periods = years * periods_per_year
 
 balance = float(current_savings)             # starting balance at day 0
@@ -137,13 +122,11 @@ for period in range(total_periods):
     pos_in_year = period % periods_per_year
     is_year_start = (pos_in_year == 0)
     is_year_end = (pos_in_year == periods_per_year - 1)
+
     age_start = int(init_age) + year_idx
 
     if is_year_start:
-        if use_second and age_start >= int(second_age):
-            contrib_annual = float(second_contrib)
-        else:
-            contrib_annual = float(init_contrib)
+        contrib_annual = float(second_contrib) if (use_second and age_start >= int(second_age)) else float(init_contrib)
         employee_contrib_per_period = contrib_annual / periods_per_year
         annual_contrib_for_year = 0.0
 
@@ -162,11 +145,13 @@ for period in range(total_periods):
     if is_year_end:
         year_number = year_idx + 1
         age_end = age_start + 1
+        # 🔁 Store AgeStart/AgeEnd; display AgeEnd so bars go to end-of-retirement year
         annual_data.append({
             "Year": year_number,
-            "Age": int(age_start),
+            "AgeStart": int(age_start),
             "AgeEnd": int(age_end),
-            "StartingSavings": float(current_savings),   # flat band so stack top == Total
+            "Age": int(age_end),                       # <- end-of-year label
+            "StartingSavings": float(current_savings), # flat band so stack top == Total
             "YearlyContrib": annual_contrib_for_year,
             "Contributions": cum_contrib,
             "Earnings": cum_earnings,
@@ -186,7 +171,7 @@ col2.metric("📥 Contributions (incl. employer)", f"${end_contrib:,.0f}")
 col3.metric("📈 Earnings", f"${end_earnings:,.0f}")
 
 # ── Chart (normal aspect, not stretched) ──────────────────────────────────────
-fig, ax = plt.subplots(figsize=(10, 6))  # normal size like before
+fig, ax = plt.subplots(figsize=(10, 6))
 fig.patch.set_facecolor("#f7f7f7" if "Light" in theme else "#111418")
 ax.set_facecolor("#ffffff" if "Light" in theme else "#0c0f13")
 
@@ -205,7 +190,10 @@ ax.bar(years_x, df["Contributions"], bottom=bottoms, color=contrib_color, edgeco
 ax.bar(years_x, df["Earnings"], bottom=bottoms + df["Contributions"], color=earnings_color, edgecolor="none",
        label="Earnings", zorder=3, width=bar_width)
 
-ax.set_xlabel("Year (1 = first plan year)")
+# 🔁 X-axis labels show end-of-year ages so last bar == retirement age
+ax.set_xticks(df["Year"])
+ax.set_xticklabels(df["Age"], rotation=0)
+ax.set_xlabel("End-of-year age")
 ax.set_ylabel("Amount ($)")
 ax.set_title("Future Value Calculation", fontsize=11)
 ax.yaxis.set_major_formatter(mtick.StrMethodFormatter('${x:,.0f}'))
@@ -216,28 +204,24 @@ if not df.empty:
     ax.set_xlim(df["Year"].min() - 0.5, df["Year"].max() + 0.5)
 ax.margins(x=0.02)
 
-# Headroom so callout line can sit above bars (we’ll refine after computing lines)
+# Headroom for labels/lines
 max_total = float(df["Total"].max()) if not df.empty else 1.0
 _, y_top_initial = ax.get_ylim()
-# Start with modest headroom; we’ll expand if needed for line height
 target_top = max_total * 1.20
 if y_top_initial < target_top:
     ax.set_ylim(top=target_top)
 
-# ── Legend below (or alternative positions via control) ───────────────────────
+# ── Legend placement ──────────────────────────────────────────────────────────
 def apply_legend():
     if legend_position == "Below (center)":
         ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=True)
-        plt.subplots_adjust(bottom=0.25, top=0.90)  # space for legend
+        plt.subplots_adjust(bottom=0.25, top=0.90)
     elif legend_position == "Upper right":
-        ax.legend(loc="upper right", frameon=True)
-        plt.subplots_adjust(bottom=0.12, top=0.92)
+        ax.legend(loc="upper right", frameon=True); plt.subplots_adjust(bottom=0.12, top=0.92)
     elif legend_position == "Upper left":
-        ax.legend(loc="upper left", frameon=True)
-        plt.subplots_adjust(bottom=0.12, top=0.92)
+        ax.legend(loc="upper left", frameon=True); plt.subplots_adjust(bottom=0.12, top=0.92)
     else:  # Best (auto)
-        ax.legend(loc="best", frameon=True)
-        plt.subplots_adjust(bottom=0.12, top=0.92)
+        ax.legend(loc="best", frameon=True); plt.subplots_adjust(bottom=0.12, top=0.92)
 
 apply_legend()
 
@@ -248,88 +232,59 @@ def y_total_at_year(year_num: int):
         return None
     return float(row["Total"].iloc[0])
 
-# ── Callouts: VERTICAL leader line above the label, arrow down to bar top ────
+# ── Callouts: vertical leader (end-of-year ages) ─────────────────────────────
 def add_callouts_vertical(points):
-    """
-    Draw a vertical leader line ABOVE the label, with an arrow pointing DOWN to
-    the bar top (no horizontal line). The label box is placed above the bar,
-    just below the top of the vertical line. y-limits are expanded if needed.
-    """
     if not points:
         return
 
-    # Fallbacks in case UI controls aren't defined
-    height_factor = float(globals().get("callout_height_factor", 0.55))  # where the line top sits between bar top and axis top (0..1)
-    line_len_frac = float(globals().get("callout_line_length", 0.18))    # minimum vertical line length as fraction of axis height
-    text_gap_frac = float(globals().get("callout_text_gap", 0.02))       # gap between line top and label (as % of axis height)
-    min_above_frac = 0.02                                                # minimum gap of label above bar top
+    height_factor = float(globals().get("callout_height_factor", 0.55))
+    line_len_frac = float(globals().get("callout_line_length", 0.18))
+    text_gap_frac = float(globals().get("callout_text_gap", 0.02))
+    min_above_frac = 0.02
 
-    # Theme-aware colors
     light_mode = ("Light" in theme) if isinstance(theme, str) else True
     box_fc = "#ffffff" if light_mode else "#1b1f24"
     box_ec = "#cfcfcf" if light_mode else "#333333"
     line_color = "#333333"
 
-    # Ensure enough vertical headroom for the highest leader line
     ymin, ymax = ax.get_ylim()
     desired_tops = []
     for p in points:
         y_bar = float(p["y"])
-        # candidate line top based on remaining headroom
-        y_line_top = y_bar + (ymax - y_bar) * height_factor
-        # enforce a minimum line length
-        y_line_top = max(y_line_top, y_bar + line_len_frac * ymax)
-        desired_tops.append(y_line_top * 1.06)  # small headroom above line top
+        y_line_top = max(y_bar + (ymax - y_bar) * height_factor, y_bar + line_len_frac * ymax)
+        desired_tops.append(y_line_top * 1.06)
 
     if desired_tops:
         needed_top = max(ymax, max(desired_tops))
         if needed_top > ymax:
             ax.set_ylim(top=needed_top)
 
-    # Recompute with final limits
     _, ymax = ax.get_ylim()
     min_above_abs = min_above_frac * ymax
-    text_gap_abs = 0  # <-- Set gap to zero
+    text_gap_abs = 0
 
     for p in points:
-        x = float(p["x"])
-        y_bar = float(p["y"])
-
-        # Final line top position
-        y_line_top = y_bar + (ymax - y_bar) * height_factor
-        y_line_top = max(y_line_top, y_bar + line_len_frac * ymax)
-
-        # Vertical leader with arrow DOWN to the bar top (no horizontal line)
-        ax.annotate(
-            "",
-            xy=(x, y_bar),           # arrow tip at the bar top
-            xytext=(x, y_line_top),  # start of the leader line (above the label)
-            arrowprops=dict(arrowstyle="->", lw=1.2, color=line_color),
-            zorder=9
-        )
-
-        # Label box BELOW the line top, but ABOVE the bar (guaranteed)
+        x = float(p["x"]); y_bar = float(p["y"])
+        y_line_top = max(y_bar + (ymax - y_bar) * height_factor, y_bar + line_len_frac * ymax)
+        ax.annotate("", xy=(x, y_bar), xytext=(x, y_line_top),
+                    arrowprops=dict(arrowstyle="->", lw=1.2, color=line_color), zorder=9)
         y_text = max(y_bar + min_above_abs, y_line_top - text_gap_abs)
-        ax.text(
-            x, y_text, p["label"],
-            ha="center", va="top", fontsize=9,
-            bbox=dict(boxstyle="round,pad=0.25", fc=box_fc, ec=box_ec),
-            zorder=10
-        )
+        ax.text(x, y_text, p["label"], ha="center", va="top", fontsize=9,
+                bbox=dict(boxstyle="round,pad=0.25", fc=box_fc, ec=box_ec), zorder=10)
 
-# Build callouts using AGE + AMOUNT (no “year 16”)
+# Build callouts using END-OF-YEAR ages
 callouts = []
 
-# 1) Initial (Year 1)
+# 1) End of Year 1
 y1 = y_total_at_year(1)
 if y1 is not None:
     callouts.append({
         "x": 1,
         "y": y1,
-        "label": f"Initial contribution: ${init_contrib:,.0f}\nAge: {int(init_age)}"
+        "label": f"End of Year 1\nAge: {int(init_age)+1}\n+${init_contrib:,.0f} (employee) + employer"
     })
 
-# 2) Second schedule (by AGE)
+# 2) Second schedule (first year it applies; end-of-year age)
 if use_second and int(second_age) >= int(init_age):
     second_year_num = int(second_age) - int(init_age) + 1
     ys = y_total_at_year(second_year_num)
@@ -337,10 +292,10 @@ if use_second and int(second_age) >= int(init_age):
         callouts.append({
             "x": second_year_num,
             "y": ys,
-            "label": f"Second contribution: ${second_contrib:,.0f}\nAge: {int(second_age)}"
+            "label": f"Second schedule kicks in\nAge: {int(second_age)+1}"
         })
 
-# 3) Retirement
+# 3) Retirement (end of retirement year)
 last_year_num = int(years)
 yr = y_total_at_year(last_year_num)
 if yr is not None:
@@ -350,11 +305,10 @@ if yr is not None:
         "label": f"Retirement\nAge: {int(ret_age)}\nTotal: ${yr:,.0f}"
     })
 
-# Add callouts (vertical line above label, arrow down)
 if show_callouts:
     add_callouts_vertical(callouts)
 
-# Render chart (normal—not stretched)
+# Render chart
 st.pyplot(fig)
 
 # ✅ Export Chart (PNG)
@@ -394,8 +348,8 @@ except Exception:
     )
 
 # ── Data Table ────────────────────────────────────────────────────────────────
+# Show Age as END-OF-YEAR age; include AgeStart/AgeEnd for clarity
 view_cols = [
-    "Year", "Age", "StartingSavings",
-    "YearlyContrib", "Contributions", "Earnings", "Total"
+    "Year", "Age", "AgeStart", "AgeEnd",
+    "StartingSavings", "YearlyContrib", "Contributions", "Earnings", "Total"
 ]
-st.dataframe(df[view_cols].round(2), use_container_width=True)
