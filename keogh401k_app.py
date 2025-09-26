@@ -251,62 +251,73 @@ def y_total_at_year(year_num: int):
 # ── Callouts: horizontal line above label, arrow down to bar top ─────────────
 def add_callouts_with_line(points):
     """
-    For each point:
-      - Compute a horizontal line y-level between bar top and axis top
-        using `callout_height_factor` (0..1 along the way to top).
-      - Draw a small horizontal line centered at x with half-width `callout_line_halfwidth`.
-      - Draw an arrow pointing DOWN from that line to the bar top.
-      - Place the label BELOW the line (so labels stay lower).
-    Ensures y-limits adjust so lines/labels always fit.
+    Draws a horizontal leader line above each bar top, places the label just
+    BELOW that line (so labels stay lower) but still ABOVE the bar/cross,
+    and draws an arrow DOWN from the line to the bar top. Expands y-limits
+    if needed so lines/labels always fit.
     """
     if not points:
         return
 
-    # May need to expand ylim if lines exceed current top
-    min_y, curr_top = ax.get_ylim()
+    # Fallbacks if UI controls aren't defined
+    hf = float(globals().get("callout_height_factor", 0.50))       # 0..1 between bar top and axis top
+    halfw = float(globals().get("callout_line_halfwidth", 0.35))   # horizontal line half-width in x units
+    gap_frac = float(globals().get("callout_text_gap", 0.03))      # label gap as fraction of axis height
+    min_above_frac = 0.02                                          # minimum gap above bar top/cross
+
+    # Colors by theme
+    light_mode = ("Light" in theme) if isinstance(theme, str) else True
+    box_fc = "#ffffff" if light_mode else "#1b1f24"
+    box_ec = "#cfcfcf" if light_mode else "#333333"
+    line_color = "#333333"
+
+    # Ensure enough vertical room for the highest line
+    ymin, ymax = ax.get_ylim()
     desired_tops = []
     for p in points:
-        y_bar = p["y"]
-        y_line = y_bar + (curr_top - y_bar) * callout_height_factor
+        y_bar = float(p["y"])
+        y_line = y_bar + (ymax - y_bar) * hf
         desired_tops.append(y_line * 1.06)  # small headroom above line
+    if desired_tops:
+        needed_top = max(ymax, max(desired_tops))
+        if needed_top > ymax:
+            ax.set_ylim(top=needed_top)
 
-    new_top = max(curr_top, max(desired_tops) if desired_tops else curr_top)
-    if new_top > curr_top:
-        ax.set_ylim(top=new_top)
-
-    # Recompute with final top
-    _, final_top = ax.get_ylim()
-    text_gap_abs = callout_text_gap * final_top
+    # Recompute with final limits
+    ymin, ymax = ax.get_ylim()
+    text_gap_abs = gap_frac * ymax
+    min_above_abs = min_above_frac * ymax
 
     for p in points:
-        x = p["x"]
-        y_bar = p["y"]
+        x = float(p["x"])
+        y_bar = float(p["y"])
+
         # Line at a fraction toward the top
-        y_line = y_bar + (final_top - y_bar) * callout_height_factor
-        # Draw horizontal leader line
-        ax.plot([x - callout_line_halfwidth, x + callout_line_halfwidth],
-                [y_line, y_line], color="#333333", lw=1.2, zorder=9)
-        # Draw downward arrow from the line to bar top
+        y_line = y_bar + (ymax - y_bar) * hf
+
+        # Horizontal leader line
+        ax.plot([x - halfw, x + halfw], [y_line, y_line],
+                color=line_color, lw=1.2, zorder=9)
+
+        # Arrow from the line down to the bar/cross
         ax.annotate(
             "",
             xy=(x, y_bar),
             xytext=(x, y_line),
-            arrowprops=dict(arrowstyle="->", lw=1.2, color="#333333"),
+            arrowprops=dict(arrowstyle="->", lw=1.2, color=line_color),
             zorder=9
         )
-        # Place text BELOW the line (lower labels)
-        y_text = max(y_bar + 0.01 * final_top, y_line - text_gap_abs)
+
+        # Label BELOW the line but ABOVE the bar/cross (guaranteed)
+        y_text = max(y_bar + min_above_abs, y_line - text_gap_abs)
         ax.text(
             x, y_text, p["label"],
-            ha="center", va="top",
-            fontsize=9,
-            bbox=dict(boxstyle="round,pad=0.25",
-                      fc="#ffffff" if "Light" in theme else "#1b1f24",
-                      ec="#cfcfcf" if "Light" in theme else "#333333"),
+            ha="center", va="top", fontsize=9,
+            bbox=dict(boxstyle="round,pad=0.25", fc=box_fc, ec=box_ec),
             zorder=10
         )
 
-# Build callouts using AGE + AMOUNT (no “year 16”)
+# Build callouts using AGE + AMOUNT (no 'Year 16')
 callouts = []
 
 # 1) Initial (Year 1)
