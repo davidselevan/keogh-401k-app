@@ -94,7 +94,7 @@ if use_second and second_age < init_age:
 # ── Projection calculation ────────────────────────────────────────────────────
 # Start at day 0 with a Year 0 baseline; compound from day 1 of Year 1.
 # Run through END of retirement year (inclusive): simulate (ret_age - init_age) full years.
-years = int(ret_age - init_age)         # e.g., 65-35=30 years
+years = int(ret_age - init_age) + 1        # e.g., 65-35=30 years
 total_periods = years * periods_per_year
 
 balance = float(current_savings)        # day 0 baseline
