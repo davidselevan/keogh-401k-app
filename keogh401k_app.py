@@ -279,34 +279,54 @@ def add_callouts_vertical(points):
 
 # ── Callouts (per spec) ──────────────────────────────────────────────────────
 callouts = []
-# Year 1 callout: "Initial Year", Contribution amount (employee+employer for Year 1), and Total
+
+# 1) Initial Year (Year 1): keep as-is (shows Initial Year, total, and currently the Year 1 total contribution)
 y1, idx1 = total_and_index_for_yearnum(1)
 if show_callouts and (y1 is not None):
-    year1_contrib = float(df.loc[df["Year"] == 1, "YearlyContrib"].iloc[0])
+    # If you prefer employee-only here too, swap to: init_contrib
+    year1_contrib_total = float(df.loc[df["Year"] == 1, "YearlyContrib"].iloc[0])
     callouts.append({
         "x": idx1,
         "y": y1,
-        "label": f"Initial Year (Age {int(init_age)})\nContribution: ${year1_contrib:,.0f}\nTotal: ${y1:,.0f}"
+        "label": f"Initial Year (Age {int(init_age)})\nContribution: ${year1_contrib_total:,.0f}\nTotal: ${y1:,.0f}"
     })
 
-# Second schedule callout (first year it applies)
+# 2) Second schedule kicks in — show the **second contribution amount** (employee)
 if show_callouts and use_second and int(second_age) >= int(init_age):
     second_year_num = int(second_age) - int(init_age) + 1
     ys, idx2 = total_and_index_for_yearnum(second_year_num)
     if ys is not None:
+        second_contrib_employee = float(second_contrib)
         callouts.append({
             "x": idx2,
             "y": ys,
-            "label": f"Second schedule (Age {int(second_age)})\nTotal: ${ys:,.0f}"
+            "label": (
+                f"Second Schedule (Age {int(second_age)})\n"
+                f"Contribution: ${second_contrib_employee:,.0f}\n"
+                f"Total: ${ys:,.0f}"
+            )
         })
 
-# Retirement callout (end of retirement year)
-ylast, idx_last = total_and_index_for_yearnum(int(years))
+# 3) Retirement (end of retirement year) — show the **most recent** contribution amount
+#    (Second if used in last year, otherwise First)
+last_year_num = int(years)  # end of retirement year in your current setup
+ylast, idx_last = total_and_index_for_yearnum(last_year_num)
 if show_callouts and (ylast is not None):
+    # Which schedule applied in the final year? (labeling is start-of-year age)
+    last_age_start = int(init_age) + (last_year_num - 1)
+    last_employee_contrib = (
+        float(second_contrib)
+        if (use_second and last_age_start >= int(second_age))
+        else float(init_contrib)
+    )
     callouts.append({
         "x": idx_last,
         "y": ylast,
-        "label": f"Retirement (Age {int(ret_age)})\nTotal: ${ylast:,.0f}"
+        "label": (
+            f"Retirement (Age {int(ret_age)})\n"
+            f"Contribution: ${last_employee_contrib:,.0f}\n"
+            f"Total: ${ylast:,.0f}"
+        )
     })
 
 if show_callouts:
