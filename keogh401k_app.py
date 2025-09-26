@@ -42,10 +42,30 @@ starting_color = "#d1d5db" if "Light" in theme else "#4b5563"
 # 🔘 Toggle to show/hide milestone labels (callouts)
 show_callouts = st.sidebar.checkbox("Show milestone callouts (labels)", value=True)
 
+# ➕ Layout controls (lets you 'move' labels/legend without code edits)
+st.sidebar.markdown("### Chart Layout Controls")
+legend_position = st.sidebar.selectbox(
+    "Legend position",
+    ["Below (center)", "Upper right", "Upper left", "Best (auto)"],
+    index=0
+)
+callout_height_factor = st.sidebar.slider(
+    "Callout line height (0.30 = low • 0.80 = high)",
+    min_value=0.30, max_value=0.80, value=0.50, step=0.02
+)
+callout_line_halfwidth = st.sidebar.slider(
+    "Callout horizontal line half-width (bars)",
+    min_value=0.10, max_value=0.60, value=0.35, step=0.05
+)
+callout_text_gap = st.sidebar.slider(
+    "Gap between line and label (as % of axis height)",
+    min_value=0.01, max_value=0.08, value=0.03, step=0.01
+)
+
 # ── 401(k) inputs ────────────────────────────────────────────────────────────
 st.sidebar.subheader("401(k) Inputs")
 
-# Starting balance (at day 0; Year 1 begins immediately—no Year 0 row)
+# Starting balance at day 0 (Year 1 includes it; NO Year 0 row)
 current_savings = st.sidebar.number_input(
     "Current Savings (Starting balance at day 0)",
     min_value=0.0, max_value=10_000_000.0, value=0.0, step=1_000.0
@@ -55,7 +75,7 @@ current_savings = st.sidebar.number_input(
 # contrib_mode = st.sidebar.radio("Contribution Mode", ["Fixed Dollar Amount", "Percent of Salary"], index=0)
 contrib_mode = "Fixed Dollar Amount"
 
-# ▶▶ EXACT TWO-INPUT BOXES (as requested)
+# ▶▶ EXACT TWO-INPUT BOXES (per your spec)
 with st.sidebar.expander("Initial Contribution Schedule", expanded=True):
     init_age = st.number_input("Initial Start Age", 18, 80, 35, 1)
     init_contrib = st.number_input("Initial contribution amount", 1000, 1_000_000, 50_000, 1_000)
@@ -65,7 +85,7 @@ with st.sidebar.expander("Second Contribution Schedule", expanded=True):
     second_age = st.number_input("Second Start Age", int(init_age), 80, second_age_default, 1)
     second_contrib = st.number_input("Second contribution amount", 1000, 1_000_000, 55_000, 1_000)
 
-# Keep the toggle outside the boxes to keep each box to exactly two fields
+# Keep the toggle outside the boxes so each box contains exactly the two fields you wanted
 use_second = st.sidebar.checkbox("Use second contribution schedule", value=True)
 
 # Percent-of-salary inputs — ENTIRELY COMMENTED OUT (kept, not active)
@@ -98,7 +118,7 @@ if use_second and second_age < init_age:
     st.stop()
 
 # ── Projection calculation ────────────────────────────────────────────────────
-# Year 1 starts at day 0 and runs to day 365. NO Year 0 row is created.
+# Year 1 spans day 0–365. NO Year 0 row.
 years = int(ret_age - init_age)              # Year = 1..years
 total_periods = years * periods_per_year
 
@@ -106,47 +126,39 @@ balance = float(current_savings)             # starting balance at day 0
 cum_contrib = 0.0
 cum_earnings = 0.0
 
-annual_data = []                             # captured at END of each plan year
+annual_data = []                             # capture END of each plan year
 annual_contrib_for_year = 0.0
 
 employee_contrib_per_period = 0.0
 employer_rate_effective = float(employer_contrib_rate)
 
 for period in range(total_periods):
-    # period runs 0..total_periods-1
-    year_idx = period // periods_per_year            # 0-based year index (Year 1 -> index 0)
+    year_idx = period // periods_per_year
     pos_in_year = period % periods_per_year
     is_year_start = (pos_in_year == 0)
     is_year_end = (pos_in_year == periods_per_year - 1)
-
-    # Age at the start of this plan year (displayed on the Year row)
     age_start = int(init_age) + year_idx
 
-    # Set this year's contribution schedule at the START of the year
     if is_year_start:
         if use_second and age_start >= int(second_age):
             contrib_annual = float(second_contrib)
         else:
             contrib_annual = float(init_contrib)
-
         employee_contrib_per_period = contrib_annual / periods_per_year
-        annual_contrib_for_year = 0.0  # reset yearly accumulator
+        annual_contrib_for_year = 0.0
 
-    # Employer per-period based on effective rate
     employer_amt = employee_contrib_per_period * employer_rate_effective
     total_contrib = employee_contrib_per_period + employer_amt
 
-    # Deposit at the START of the period (day 0), then earn for the period
+    # Deposit at start of period, then earn for the period
     balance += total_contrib
     earnings = balance * rate_per_period
     balance += earnings
 
-    # Accumulate trackers
     annual_contrib_for_year += total_contrib
     cum_contrib += total_contrib
     cum_earnings += earnings
 
-    # Capture row at END of the year
     if is_year_end:
         year_number = year_idx + 1
         age_end = age_start + 1
@@ -154,14 +166,13 @@ for period in range(total_periods):
             "Year": year_number,
             "Age": int(age_start),
             "AgeEnd": int(age_end),
-            "StartingSavings": float(current_savings),   # flat band to keep top == Total
+            "StartingSavings": float(current_savings),   # flat band so stack top == Total
             "YearlyContrib": annual_contrib_for_year,
             "Contributions": cum_contrib,
             "Earnings": cum_earnings,
             "Total": balance
         })
 
-# Build DataFrame
 df = pd.DataFrame(annual_data)
 
 # ── KPI Metrics ───────────────────────────────────────────────────────────────
@@ -174,17 +185,16 @@ col1.metric("💰 Ending Balance", f"${end_balance:,.0f}")
 col2.metric("📥 Contributions (incl. employer)", f"${end_contrib:,.0f}")
 col3.metric("📈 Earnings", f"${end_earnings:,.0f}")
 
-# ── Chart ─────────────────────────────────────────────────────────────────────
-# Wider aspect to fill horizontally; legend moved below; margins tuned so nothing overlaps
-fig, ax = plt.subplots(figsize=(14, 5))  # wide figure to fill page
+# ── Chart (normal aspect, not stretched) ──────────────────────────────────────
+fig, ax = plt.subplots(figsize=(10, 6))  # normal size like before
 fig.patch.set_facecolor("#f7f7f7" if "Light" in theme else "#111418")
 ax.set_facecolor("#ffffff" if "Light" in theme else "#0c0f13")
 
 years_x = df["Year"]
-bottoms = np.zeros(len(df))
-bar_width = 0.90
+bar_width = 0.85
 
-# Flat baseline band (StartingSavings) to keep stacks matching Total
+# Draw baseline + stacks
+bottoms = np.zeros(len(df))
 if current_savings >= 0:
     ax.bar(years_x, df["StartingSavings"], color=starting_color, edgecolor="none",
            label="Starting Savings", zorder=1, width=bar_width)
@@ -198,71 +208,108 @@ ax.bar(years_x, df["Earnings"], bottom=bottoms + df["Contributions"], color=earn
 ax.set_xlabel("Year (1 = first plan year)")
 ax.set_ylabel("Amount ($)")
 ax.set_title("Future Value Calculation", fontsize=11)
-
-# Legend BELOW the plot so it never covers bars
-legend = ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=True)
-
 ax.yaxis.set_major_formatter(mtick.StrMethodFormatter('${x:,.0f}'))
 ax.grid(axis='y', linestyle='--', alpha=0.6)
 
-# Tight x-margins to fill horizontally
+# Tight x-limits and margins
 if not df.empty:
     ax.set_xlim(df["Year"].min() - 0.5, df["Year"].max() + 0.5)
-ax.margins(x=0.01)
+ax.margins(x=0.02)
 
-# Headroom—kept modest so labels sit LOWER (near bar tops), not floating
+# Headroom so callout line can sit above bars (we’ll refine after computing lines)
 max_total = float(df["Total"].max()) if not df.empty else 1.0
-_, ymax = ax.get_ylim()
-target_top = max_total * 1.22  # ~22% headroom keeps labels low but off bars
-if ymax < target_top:
+_, y_top_initial = ax.get_ylim()
+# Start with modest headroom; we’ll expand if needed for line height
+target_top = max_total * 1.20
+if y_top_initial < target_top:
     ax.set_ylim(top=target_top)
 
-# Leave space for bottom legend and keep everything visible
-plt.subplots_adjust(left=0.10, right=0.98, top=0.92, bottom=0.28)
-plt.tight_layout()
+# ── Legend below (or alternative positions via control) ───────────────────────
+def apply_legend():
+    if legend_position == "Below (center)":
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=True)
+        plt.subplots_adjust(bottom=0.25, top=0.90)  # space for legend
+    elif legend_position == "Upper right":
+        ax.legend(loc="upper right", frameon=True)
+        plt.subplots_adjust(bottom=0.12, top=0.92)
+    elif legend_position == "Upper left":
+        ax.legend(loc="upper left", frameon=True)
+        plt.subplots_adjust(bottom=0.12, top=0.92)
+    else:  # Best (auto)
+        ax.legend(loc="best", frameon=True)
+        plt.subplots_adjust(bottom=0.12, top=0.92)
 
-# ── Milestone callouts (lower, age-based) ─────────────────────────────────────
+apply_legend()
+
+# ── Helper: y at bar top for a given Year ─────────────────────────────────────
 def y_total_at_year(year_num: int):
     row = df.loc[df["Year"] == int(year_num)]
     if row.empty:
         return None
     return float(row["Total"].iloc[0])
 
-def add_callouts_low(points, y_gap_frac=0.05):
+# ── Callouts: horizontal line above label, arrow down to bar top ─────────────
+def add_callouts_with_line(points):
     """
-    Place annotations just above the bar tops with small vertical spacing so
-    they remain LOW (near bars) and do not overlap each other or the bars.
+    For each point:
+      - Compute a horizontal line y-level between bar top and axis top
+        using `callout_height_factor` (0..1 along the way to top).
+      - Draw a small horizontal line centered at x with half-width `callout_line_halfwidth`.
+      - Draw an arrow pointing DOWN from that line to the bar top.
+      - Place the label BELOW the line (so labels stay lower).
+    Ensures y-limits adjust so lines/labels always fit.
     """
     if not points:
         return
-    _ymin, _ymax = ax.get_ylim()
-    gap = y_gap_frac * _ymax
-    # Sort by x (timeline)
-    pts = sorted(points, key=lambda p: p["x"])
-    last_y_text = -np.inf
-    for p in pts:
-        base = p["y"] + gap
-        y_text = max(base, last_y_text + gap)  # stagger if needed
-        y_text = min(y_text, _ymax * 0.97)
+
+    # May need to expand ylim if lines exceed current top
+    min_y, curr_top = ax.get_ylim()
+    desired_tops = []
+    for p in points:
+        y_bar = p["y"]
+        y_line = y_bar + (curr_top - y_bar) * callout_height_factor
+        desired_tops.append(y_line * 1.06)  # small headroom above line
+
+    new_top = max(curr_top, max(desired_tops) if desired_tops else curr_top)
+    if new_top > curr_top:
+        ax.set_ylim(top=new_top)
+
+    # Recompute with final top
+    _, final_top = ax.get_ylim()
+    text_gap_abs = callout_text_gap * final_top
+
+    for p in points:
+        x = p["x"]
+        y_bar = p["y"]
+        # Line at a fraction toward the top
+        y_line = y_bar + (final_top - y_bar) * callout_height_factor
+        # Draw horizontal leader line
+        ax.plot([x - callout_line_halfwidth, x + callout_line_halfwidth],
+                [y_line, y_line], color="#333333", lw=1.2, zorder=9)
+        # Draw downward arrow from the line to bar top
         ax.annotate(
-            p["label"],
-            xy=(p["x"], p["y"]),
-            xytext=(p["x"], y_text),
-            textcoords="data",
-            arrowprops=dict(facecolor="black", arrowstyle="->", lw=1),
+            "",
+            xy=(x, y_bar),
+            xytext=(x, y_line),
+            arrowprops=dict(arrowstyle="->", lw=1.2, color="#333333"),
+            zorder=9
+        )
+        # Place text BELOW the line (lower labels)
+        y_text = max(y_bar + 0.01 * final_top, y_line - text_gap_abs)
+        ax.text(
+            x, y_text, p["label"],
+            ha="center", va="top",
             fontsize=9,
-            ha="center",
-            va="center",
             bbox=dict(boxstyle="round,pad=0.25",
                       fc="#ffffff" if "Light" in theme else "#1b1f24",
                       ec="#cfcfcf" if "Light" in theme else "#333333"),
             zorder=10
         )
-        last_y_text = y_text
 
+# Build callouts using AGE + AMOUNT (no “year 16”)
 callouts = []
 
-# 1) Initial (Year 1) — label uses amount + AGE (not year number)
+# 1) Initial (Year 1)
 y1 = y_total_at_year(1)
 if y1 is not None:
     callouts.append({
@@ -271,7 +318,7 @@ if y1 is not None:
         "label": f"Initial contribution: ${init_contrib:,.0f}\nAge: {int(init_age)}"
     })
 
-# 2) Second schedule start — label uses amount + Second Start AGE
+# 2) Second schedule (by AGE)
 if use_second and int(second_age) >= int(init_age):
     second_year_num = int(second_age) - int(init_age) + 1
     ys = y_total_at_year(second_year_num)
@@ -282,7 +329,7 @@ if use_second and int(second_age) >= int(init_age):
             "label": f"Second contribution: ${second_contrib:,.0f}\nAge: {int(second_age)}"
         })
 
-# 3) Retirement — keep for context; age-based
+# 3) Retirement
 last_year_num = int(years)
 yr = y_total_at_year(last_year_num)
 if yr is not None:
@@ -292,8 +339,12 @@ if yr is not None:
         "label": f"Retirement\nAge: {int(ret_age)}\nTotal: ${yr:,.0f}"
     })
 
+# Add callouts (lower labels, line above, arrow down)
 if show_callouts:
-    add_callouts_low(callouts)
+    add_callouts_with_line(callouts)
+
+# Render chart (normal—not stretched)
+st.pyplot(fig)  # no use_container_width -> looks like a classic chart
 
 # ✅ Export Chart (PNG)
 png_buf = io.BytesIO()
@@ -306,9 +357,6 @@ st.download_button(
     mime="image/png",
     key="download-chart-png",
 )
-
-# Render chart (fills the page horizontally)
-st.pyplot(fig, use_container_width=True)
 
 # ── Export Table ──────────────────────────────────────────────────────────────
 try:
@@ -335,11 +383,8 @@ except Exception:
     )
 
 # ── Data Table ────────────────────────────────────────────────────────────────
-# Show Age as start-of-year age for Year >= 1.
 view_cols = [
-    "Year",
-    "Age",
-    "StartingSavings",
+    "Year", "Age", "StartingSavings",
     "YearlyContrib", "Contributions", "Earnings", "Total"
 ]
 st.dataframe(df[view_cols].round(2), use_container_width=True)
