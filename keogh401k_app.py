@@ -248,52 +248,68 @@ def y_total_at_year(year_num: int):
         return None
     return float(row["Total"].iloc[0])
 
-# ── Callouts: horizontal line above label, arrow down to bar top ─────────────
-def add_callouts_with_line(points):
+# ── Callouts: VERTICAL leader line above the label, arrow down to bar top ────
+def add_callouts_vertical(points):
     """
-    Draws a horizontal leader line above each bar top and places the label
-    BELOW that line (so labels stay lower). No arrow or cross marker.
-    Expands y-limits if needed so lines/labels always fit.
+    Draw a vertical leader line ABOVE the label, with an arrow pointing DOWN to
+    the bar top (no horizontal line). The label box is placed above the bar,
+    just below the top of the vertical line. y-limits are expanded if needed.
     """
     if not points:
         return
 
-    hf = float(globals().get("callout_height_factor", 0.50))       # 0..1 between bar top and axis top
-    halfw = float(globals().get("callout_line_halfwidth", 0.35))   # horizontal line half-width
-    gap_frac = float(globals().get("callout_text_gap", 0.03))      # gap between line and label
-    min_above_frac = 0.02                                          # minimum gap above bar top
+    # Fallbacks in case UI controls aren't defined
+    height_factor = float(globals().get("callout_height_factor", 0.55))  # where the line top sits between bar top and axis top (0..1)
+    line_len_frac = float(globals().get("callout_line_length", 0.18))    # minimum vertical line length as fraction of axis height
+    text_gap_frac = float(globals().get("callout_text_gap", 0.02))       # gap between line top and label (as % of axis height)
+    min_above_frac = 0.02                                                # minimum gap of label above bar top
 
+    # Theme-aware colors
     light_mode = ("Light" in theme) if isinstance(theme, str) else True
     box_fc = "#ffffff" if light_mode else "#1b1f24"
     box_ec = "#cfcfcf" if light_mode else "#333333"
     line_color = "#333333"
 
+    # Ensure enough vertical headroom for the highest leader line
     ymin, ymax = ax.get_ylim()
     desired_tops = []
     for p in points:
         y_bar = float(p["y"])
-        y_line = y_bar + (ymax - y_bar) * hf
-        desired_tops.append(y_line * 1.06)
+        # candidate line top based on remaining headroom
+        y_line_top = y_bar + (ymax - y_bar) * height_factor
+        # enforce a minimum line length
+        y_line_top = max(y_line_top, y_bar + line_len_frac * ymax)
+        desired_tops.append(y_line_top * 1.06)  # small headroom above line top
+
     if desired_tops:
         needed_top = max(ymax, max(desired_tops))
         if needed_top > ymax:
             ax.set_ylim(top=needed_top)
 
-    ymin, ymax = ax.get_ylim()
-    text_gap_abs = gap_frac * ymax
+    # Recompute with final limits
+    _, ymax = ax.get_ylim()
     min_above_abs = min_above_frac * ymax
+    text_gap_abs = max(text_gap_frac * ymax, 1e-9)
 
     for p in points:
         x = float(p["x"])
         y_bar = float(p["y"])
-        y_line = y_bar + (ymax - y_bar) * hf
 
-        # Horizontal leader line
-        ax.plot([x - halfw, x + halfw], [y_line, y_line],
-                color=line_color, lw=1.2, zorder=9)
+        # Final line top position
+        y_line_top = y_bar + (ymax - y_bar) * height_factor
+        y_line_top = max(y_line_top, y_bar + line_len_frac * ymax)
 
-        # Label BELOW the line but ABOVE the bar
-        y_text = max(y_bar + min_above_abs, y_line - text_gap_abs)
+        # Vertical leader with arrow DOWN to the bar top (no horizontal line)
+        ax.annotate(
+            "",
+            xy=(x, y_bar),           # arrow tip at the bar top
+            xytext=(x, y_line_top),  # start of the leader line (above the label)
+            arrowprops=dict(arrowstyle="->", lw=1.2, color=line_color),
+            zorder=9
+        )
+
+        # Label box BELOW the line top, but ABOVE the bar (guaranteed)
+        y_text = max(y_bar + min_above_abs, y_line_top - text_gap_abs)
         ax.text(
             x, y_text, p["label"],
             ha="center", va="top", fontsize=9,
@@ -301,8 +317,7 @@ def add_callouts_with_line(points):
             zorder=10
         )
 
-
-# Build callouts using AGE + AMOUNT (no 'Year 16')
+# Build callouts using AGE + AMOUNT (no “year 16”)
 callouts = []
 
 # 1) Initial (Year 1)
@@ -335,12 +350,12 @@ if yr is not None:
         "label": f"Retirement\nAge: {int(ret_age)}\nTotal: ${yr:,.0f}"
     })
 
-# Add callouts (lower labels, line above, arrow down)
+# Add callouts (vertical line above label, arrow down)
 if show_callouts:
-    add_callouts_with_line(callouts)
+    add_callouts_vertical(callouts)
 
 # Render chart (normal—not stretched)
-st.pyplot(fig)  # no use_container_width -> looks like a classic chart
+st.pyplot(fig)
 
 # ✅ Export Chart (PNG)
 png_buf = io.BytesIO()
