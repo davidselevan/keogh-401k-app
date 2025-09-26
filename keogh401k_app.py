@@ -51,9 +51,7 @@ current_savings = st.sidebar.number_input(
 use_second = st.sidebar.checkbox("Use second contribution schedule", value=True)
 
 # 🔹 Contribution Mode Toggle — COMMENTED OUT (fixed-dollar only)
-# contrib_mode = st.sidebar.radio(
-#     "Contribution Mode", ["Fixed Dollar Amount", "Percent of Salary"], index=0
-# )
+# contrib_mode = st.sidebar.radio("Contribution Mode", ["Fixed Dollar Amount", "Percent of Salary"], index=0)
 contrib_mode = "Fixed Dollar Amount"
 
 # Fixed-dollar inputs
@@ -94,32 +92,44 @@ if use_second and second_age < init_age:
     st.stop()
 
 # ── Projection calculation ────────────────────────────────────────────────────
-years = int(ret_age - init_age)              # number of full plan years
+years = int(ret_age - init_age)              # number of full plan years (Year 1..years)
 total_periods = years * periods_per_year
 
 balance = float(current_savings)             # starting at Year 0 (before Year 1 contributions)
 cum_contrib = 0.0
 cum_earnings = 0.0
 
-annual_data = []                             # rows captured at END of each year
+annual_data = []                             # rows captured at END of each plan year
 annual_contrib_for_year = 0.0
 
 employee_contrib_per_period = 0.0
 employer_rate_effective = float(employer_contrib_rate)
 
+# ✅ Add an explicit Year 0 row so we can label it and visualize the baseline
+annual_data.append({
+    "Year": 0,
+    "Age": int(init_age),          # show start age for Year 0
+    "AgeEnd": int(init_age),       # same as start (no accrual yet)
+    "StartingSavings": float(current_savings),
+    "YearlyContrib": 0.0,
+    "Contributions": 0.0,
+    "Earnings": 0.0,
+    "Total": balance
+})
+
 for period in range(total_periods):
     # period runs 0..total_periods-1
-    year_idx = period // periods_per_year            # 0-based year index
+    year_idx = period // periods_per_year            # 0-based year index (Year 1 corresponds to index 0)
     pos_in_year = period % periods_per_year
     is_year_start = (pos_in_year == 0)
     is_year_end = (pos_in_year == periods_per_year - 1)
 
-    # Age at the start of this plan year
-    age_plan_year = int(init_age) + year_idx
+    # Age at the start of this plan year (✅ we'll display this as the "Age" for that year)
+    age_start = int(init_age) + year_idx
 
     # Set this year's contribution schedule at the START of the year
     if is_year_start:
-        if use_second and age_plan_year >= int(second_age):
+        if use_second and age_start >= int(second_age):
             contrib_annual = float(second_contrib)
         else:
             contrib_annual = float(init_contrib)
@@ -143,12 +153,13 @@ for period in range(total_periods):
 
     # Capture row at END of the year (so Year 1 has full-year totals)
     if is_year_end:
-        year_number = year_idx + 1                        # 1-based Year
-        end_age = int(init_age) + year_number            # integer age at end of year
+        year_number = year_idx + 1                 # 1-based Year numbering
+        age_end = age_start + 1                    # end-of-year integer age
         annual_data.append({
             "Year": year_number,
-            "Age": end_age,
-            "StartingSavings": float(current_savings),   # optional band in the chart
+            "Age": int(age_start),                 # ✅ show start-of-year age (e.g., 35 for Year 1)
+            "AgeEnd": int(age_end),
+            "StartingSavings": float(current_savings),   # for stacked baseline band
             "YearlyContrib": annual_contrib_for_year,    # contributions for THIS year
             "Contributions": cum_contrib,                # cumulative (incl. employer)
             "Earnings": cum_earnings,                    # cumulative earnings
@@ -173,34 +184,112 @@ fig, ax = plt.subplots(figsize=(10, 6))
 fig.patch.set_facecolor("#f7f7f7" if "Light" in theme else "#111418")
 ax.set_facecolor("#ffffff" if "Light" in theme else "#0c0f13")
 
+# Stacked bars with a flat "StartingSavings" baseline band so top == Total
+years_x = df["Year"]
 bottoms = np.zeros(len(df))
 if current_savings > 0:
-    ax.bar(df["Year"], df["StartingSavings"], color=starting_color, edgecolor="none",
+    ax.bar(years_x, df["StartingSavings"], color=starting_color, edgecolor="none",
            label="Starting Savings", zorder=1)
     bottoms = df["StartingSavings"].values
 
-ax.bar(df["Year"], df["Contributions"], bottom=bottoms, color=contrib_color, edgecolor="none",
+ax.bar(years_x, df["Contributions"], bottom=bottoms, color=contrib_color, edgecolor="none",
        label="Contributions", zorder=2)
-ax.bar(df["Year"], df["Earnings"], bottom=bottoms + df["Contributions"], color=earnings_color, edgecolor="none",
+ax.bar(years_x, df["Earnings"], bottom=bottoms + df["Contributions"], color=earnings_color, edgecolor="none",
        label="Earnings", zorder=3)
 
-ax.set_xlabel("Years Worked")
+ax.set_xlabel("Year (0 = starting point, then Year 1..)")
 ax.set_ylabel("Amount ($)")
 ax.set_title("Future Value Calculation", fontsize=11)
 ax.legend(frameon=True)
 ax.yaxis.set_major_formatter(mtick.StrMethodFormatter('${x:,.0f}'))
 ax.grid(axis='y', linestyle='--', alpha=0.6)
 
-# Add some headroom for labels
+# Headroom for annotations
 max_total = float(df["Total"].max()) if not df.empty else 1.0
-ymin, ymax = ax.get_ylim()
+_, ymax = ax.get_ylim()
 top_with_headroom = max_total * 1.28
 if ymax < top_with_headroom:
     ax.set_ylim(top=top_with_headroom)
 
 plt.tight_layout()
 
-# ✅ Export Chart (PNG) — restored
+# ── Non-overlapping milestone callouts ────────────────────────────────────────
+def add_callouts_no_overlap(points, left_right_offsets=(-0.9, 0.9), y_gap_frac=0.06):
+    """
+    Stagger annotation boxes vertically to avoid overlap.
+    points: list of dicts with keys {x, y, label}
+    left_right_offsets: tuple of x offsets alternated across points
+    y_gap_frac: minimum vertical gap between boxes as a fraction of current ymax
+    """
+    if not points:
+        return
+    _ymin, _ymax = ax.get_ylim()
+    gap = y_gap_frac * _ymax
+    pts = sorted(points, key=lambda p: p["y"])
+    last_yt = -np.inf
+    for i, p in enumerate(pts):
+        xoff = left_right_offsets[i % 2]
+        base_yt = p["y"] * 1.10 if p["y"] > 0 else gap
+        yt = max(base_yt, last_yt + gap)
+        yt = min(yt, ax.get_ylim()[1] * 0.98)
+        ax.annotate(
+            p["label"],
+            xy=(p["x"], p["y"]),
+            xytext=(p["x"] + xoff, yt),
+            textcoords="data",
+            arrowprops=dict(facecolor="black", arrowstyle="->", lw=1),
+            fontsize=9,
+            ha="center",
+            va="center",
+            bbox=dict(boxstyle="round,pad=0.3",
+                      fc="#ffffff" if "Light" in theme else "#1b1f24",
+                      ec="#cfcfcf" if "Light" in theme else "#333333")
+        )
+        last_yt = yt
+
+def y_total_at_year(year_num: int):
+    row = df.loc[df["Year"] == int(year_num)]
+    if row.empty:
+        return None
+    return float(row["Total"].iloc[0])
+
+callouts = []
+
+# 1) Starting Savings (Year 0)
+if current_savings > 0:
+    y0 = y_total_at_year(0)
+    if y0 is not None:
+        callouts.append({
+            "x": 0,
+            "y": y0,
+            "label": f"Starting Savings\nYear 0 | Age: {int(init_age)}\nTotal: ${y0:,.0f}"
+        })
+
+# 2) Second contribution start (at beginning of 'second_age' year)
+if use_second and int(second_age) >= int(init_age):
+    second_year_num = int(second_age) - int(init_age) + 1  # Year numbering (1-based)
+    ys = y_total_at_year(second_year_num)
+    if ys is not None:
+        callouts.append({
+            "x": second_year_num,
+            "y": ys,
+            "label": f"Second Contribution Starts\nYear {second_year_num} | Age: {int(second_age)}\nTotal: ${ys:,.0f}"
+        })
+
+# 3) Retirement (last year)
+last_year_num = int(years)
+yr = y_total_at_year(last_year_num)
+if yr is not None:
+    # Age at start of last year is ret_age - 1
+    callouts.append({
+        "x": last_year_num,
+        "y": yr,
+        "label": f"Retirement\nYear {last_year_num} | Age: {int(ret_age)}\nTotal: ${yr:,.0f}"
+    })
+
+add_callouts_no_overlap(callouts)
+
+# ✅ Export Chart (PNG)
 png_buf = io.BytesIO()
 fig.savefig(png_buf, format="png", facecolor=fig.get_facecolor(), bbox_inches="tight", dpi=200)
 png_buf.seek(0)
@@ -240,6 +329,12 @@ except Exception:
     )
 
 # ── Data Table ────────────────────────────────────────────────────────────────
-view_cols = ["Year", "Age"] + (["StartingSavings"] if current_savings > 0 else []) + \
-            ["YearlyContrib", "Contributions", "Earnings", "Total"]
+# Show "Age" as the start-of-year age so Year 1 matches the entered Initial Start Age
+view_cols = [
+    "Year",
+    "Age",          # start-of-year age (e.g., 35 for Year 1 if Initial Start Age = 35)
+    # "AgeEnd",     # uncomment to expose end-of-year age too
+] + (["StartingSavings"] if current_savings > 0 else []) + [
+    "YearlyContrib", "Contributions", "Earnings", "Total"
+]
 st.dataframe(df[view_cols].round(2), use_container_width=True)
