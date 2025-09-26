@@ -92,45 +92,55 @@ if use_second and second_age < init_age:
     st.stop()
 
 # ── Projection calculation ────────────────────────────────────────────────────
-# Start at day 0 with a Year 0 baseline; compound from day 1 of Year 1.
-# Run through END of retirement year (inclusive): simulate (ret_age - init_age) full years.
-years = int(ret_age - init_age) + 1        # e.g., 65-35=30 years
+# Rule: Each row represents one FULL age-year.
+# Year 1 = age init_age; starts day 1 of that age, ends last day of that age.
+# We include the retirement age as a full last row (inclusive).
+years = int(ret_age - init_age) + 1              # e.g., 65-35+1 = 31 age-rows (35..65 inclusive)
 total_periods = years * periods_per_year
 
-balance = float(current_savings)        # day 0 baseline
+balance = float(current_savings)                 # day 0 baseline
 cum_contrib = 0.0
 cum_earnings = 0.0
 
-annual_data = []                        # Year 0 + end-of-year rows
-annual_contrib_for_year = 0.0
+annual_data = []                                  # Year 0 + end-of-year rows
+year_contrib_total = 0.0
+year_earnings_total = 0.0
+employee_contrib_per_period = 0.0
+year_start_balance = None
 
 # ✅ Year 0 baseline row (day 0). Age intentionally blank to avoid duplicate "35".
 annual_data.append({
     "Year": 0,
     "AgeStart": int(init_age),
     "AgeEnd": int(init_age),
-    "Age": "",                   # display column (blank for Year 0)
-    "StartingSavings": balance,
-    "YearlyContrib": 0.0,        # Year 0 has no contributions
-    "Contributions": 0.0,        # cumulative
-    "Earnings": 0.0,             # cumulative
-    "Total": balance
+    "Age": "",                         # display column (blank for Year 0)
+    "StartingSavings": balance,        # balance at day 0
+    "YearlyContrib": 0.0,              # Year 0 has no contributions
+    "Contributions": 0.0,              # cumulative
+    "Earnings": 0.0,                   # cumulative
+    "Total": balance,
+    # Fields used for chart stacking (constant baseline + cumulative adds)
+    "InitialCapital": float(current_savings),
+    "CumContrib": 0.0,
+    "CumEarnings": 0.0,
 })
 
-employee_contrib_per_period = 0.0
 for period in range(total_periods):
     year_idx = period // periods_per_year            # 0..years-1
     pos_in_year = period % periods_per_year
     is_year_start = (pos_in_year == 0)
     is_year_end   = (pos_in_year == periods_per_year - 1)
 
-    age_start = int(init_age) + year_idx            # label by START-OF-YEAR age
+    age_start = int(init_age) + year_idx            # label by START-OF-YEAR age (35 for Year 1)
 
-    # Set this year's contribution schedule at the START of the year (day 1)
+    # At the very start of each age-year: freeze the starting balance,
+    # set that year's contribution schedule, and reset year trackers
     if is_year_start:
+        year_start_balance = balance
         contrib_annual = float(second_contrib) if (use_second and age_start >= int(second_age)) else float(init_contrib)
         employee_contrib_per_period = contrib_annual / periods_per_year
-        annual_contrib_for_year = 0.0
+        year_contrib_total = 0.0
+        year_earnings_total = 0.0
 
     # Deposit at start of period, then earn for the period
     employer_amt  = employee_contrib_per_period * float(employer_contrib_rate)
@@ -140,24 +150,29 @@ for period in range(total_periods):
     balance += earnings
 
     # Accumulate trackers
-    annual_contrib_for_year += total_contrib
+    year_contrib_total += total_contrib
+    year_earnings_total += earnings
     cum_contrib += total_contrib
     cum_earnings += earnings
 
-    # Capture row at END of each plan year (Year 1..years)
+    # Capture row at END of each age-year
     if is_year_end:
         year_number = year_idx + 1                    # 1..years
-        age_end = age_start + 1
+        # Per your requirement: a row is the AGE itself, start==end
         annual_data.append({
             "Year": year_number,
             "AgeStart": int(age_start),               # e.g., 35 for Year 1
-            "AgeEnd": int(age_end),                   # e.g., 36 for Year 1
-            "Age": int(age_start),                    # 🔑 display start-of-year age (Year 1 shows 35)
-            "StartingSavings": float(current_savings),
-            "YearlyContrib": annual_contrib_for_year, # this year's employee+employer sum
-            "Contributions": cum_contrib,             # cumulative
-            "Earnings": cum_earnings,                 # cumulative
-            "Total": balance                          # end-of-year balance
+            "AgeEnd": int(age_start),                 # ends last day of the same age
+            "Age": int(age_start),                    # display start-of-year age (Year 1 shows 35)
+            "StartingSavings": float(year_start_balance),  # ✅ balance at the start of this age-year
+            "YearlyContrib": float(year_contrib_total),    # this year's employee+employer sum
+            "Contributions": float(cum_contrib),           # cumulative since day 0
+            "Earnings": float(cum_earnings),               # cumulative since day 0
+            "Total": float(balance),                       # end-of-age-year balance
+            # Fields used for chart stacking (constant baseline + cumulative adds)
+            "InitialCapital": float(current_savings),
+            "CumContrib": float(cum_contrib),
+            "CumEarnings": float(cum_earnings),
         })
 
 # Build DataFrame (for chart/callouts keep Year 0; for table/export hide it)
@@ -182,13 +197,13 @@ ax.set_facecolor("#ffffff" if "Light" in theme else "#0c0f13")
 positions = np.arange(len(df))   # 0..N including Year 0
 bar_width = 0.85
 
-# Stacked bars: StartingSavings (flat band) + cumulative Contributions + cumulative Earnings
-ax.bar(positions, df["StartingSavings"], color=starting_color, edgecolor="none",
-       label="Starting Savings", zorder=1, width=bar_width)
-ax.bar(positions, df["Contributions"], bottom=df["StartingSavings"], color=contrib_color,
-       edgecolor="none", label="Contributions", zorder=2, width=bar_width)
-ax.bar(positions, df["Earnings"], bottom=df["StartingSavings"] + df["Contributions"], color=earnings_color,
-       edgecolor="none", label="Earnings", zorder=3, width=bar_width)
+# Stacked bars: INITIAL capital (constant) + cumulative Contributions + cumulative Earnings
+ax.bar(positions, df["InitialCapital"], color=starting_color, edgecolor="none",
+       label="Initial Capital (Day 0)", zorder=1, width=bar_width)
+ax.bar(positions, df["CumContrib"], bottom=df["InitialCapital"], color=contrib_color,
+       edgecolor="none", label="Cumulative Contributions", zorder=2, width=bar_width)
+ax.bar(positions, df["CumEarnings"], bottom=df["InitialCapital"] + df["CumContrib"], color=earnings_color,
+       edgecolor="none", label="Cumulative Earnings", zorder=3, width=bar_width)
 
 # 🔁 X-axis: numeric Year labels starting at 0
 ax.set_xticks(positions)
@@ -280,10 +295,9 @@ def add_callouts_vertical(points):
 # ── Callouts (per spec) ──────────────────────────────────────────────────────
 callouts = []
 
-# 1) Initial Year (Year 1): keep as-is (shows Initial Year, total, and currently the Year 1 total contribution)
+# 1) Initial Year (Year 1)
 y1, idx1 = total_and_index_for_yearnum(1)
 if show_callouts and (y1 is not None):
-    # If you prefer employee-only here too, swap to: init_contrib
     year1_contrib_total = float(df.loc[df["Year"] == 1, "YearlyContrib"].iloc[0])
     callouts.append({
         "x": idx1,
@@ -307,9 +321,8 @@ if show_callouts and use_second and int(second_age) >= int(init_age):
             )
         })
 
-# 3) Retirement (end of retirement year) — show the **most recent** contribution amount
-#    (Second if used in last year, otherwise First)
-last_year_num = int(years)  # end of retirement year in your current setup
+# 3) Retirement (end of retirement year)
+last_year_num = int(years)  # end of retirement year in inclusive setup
 ylast, idx_last = total_and_index_for_yearnum(last_year_num)
 if show_callouts and (ylast is not None):
     # Which schedule applied in the final year? (labeling is start-of-year age)
@@ -352,8 +365,12 @@ try:
     import openpyxl  # noqa: F401
     xlsx_buf = io.BytesIO()
     with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as writer:
-        # Export table WITHOUT Year 0 per your requirement
-        df_table.to_excel(writer, index=False, sheet_name="Projection")
+        # Export table WITHOUT Year 0 per your requirement and with clear columns
+        view_cols = [
+            "Year", "Age", "AgeStart", "AgeEnd",
+            "StartingSavings", "YearlyContrib", "Contributions", "Earnings", "Total"
+        ]
+        df_table[view_cols].to_excel(writer, index=False, sheet_name="Projection")
     xlsx_buf.seek(0)
     st.download_button(
         "📄 Export Table (Excel)",
@@ -363,7 +380,11 @@ try:
         key="download-table-xlsx",
     )
 except Exception:
-    csv_data = df_table.to_csv(index=False).encode("utf-8-sig")
+    view_cols = [
+        "Year", "Age", "AgeStart", "AgeEnd",
+        "StartingSavings", "YearlyContrib", "Contributions", "Earnings", "Total"
+    ]
+    csv_data = df_table[view_cols].to_csv(index=False).encode("utf-8-sig")
     st.download_button(
         "📄 Export Table (CSV)",
         data=csv_data,
