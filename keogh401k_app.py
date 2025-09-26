@@ -92,11 +92,9 @@ if use_second and second_age < init_age:
     st.stop()
 
 # ── Projection calculation ────────────────────────────────────────────────────
-# Requirement:
-# - Start at beginning of start year (add Year 0 baseline at day 0)
-# - Compound from day 1 of Year 1
-# - Go through END of retirement year (inclusive)
-years = int(ret_age - init_age)         # number of full compounding years (e.g., 35→65 => 30)
+# Start at day 0 with a Year 0 baseline; compound from day 1 of Year 1.
+# Run through END of retirement year (inclusive): simulate (ret_age - init_age) full years.
+years = int(ret_age - init_age)         # e.g., 65-35=30 years
 total_periods = years * periods_per_year
 
 balance = float(current_savings)        # day 0 baseline
@@ -106,14 +104,14 @@ cum_earnings = 0.0
 annual_data = []                        # Year 0 + end-of-year rows
 annual_contrib_for_year = 0.0
 
-# ✅ Year 0 baseline row (day 0). Age intentionally blank to avoid duplicate.
+# ✅ Year 0 baseline row (day 0). Age intentionally blank to avoid duplicate "35".
 annual_data.append({
     "Year": 0,
     "AgeStart": int(init_age),
     "AgeEnd": int(init_age),
     "Age": "",                   # display column (blank for Year 0)
     "StartingSavings": balance,
-    "YearlyContrib": 0.0,        # per-year (employee+employer) at Year 0 = 0
+    "YearlyContrib": 0.0,        # Year 0 has no contributions
     "Contributions": 0.0,        # cumulative
     "Earnings": 0.0,             # cumulative
     "Total": balance
@@ -124,7 +122,7 @@ for period in range(total_periods):
     year_idx = period // periods_per_year            # 0..years-1
     pos_in_year = period % periods_per_year
     is_year_start = (pos_in_year == 0)
-    is_year_end = (pos_in_year == periods_per_year - 1)
+    is_year_end   = (pos_in_year == periods_per_year - 1)
 
     age_start = int(init_age) + year_idx            # label by START-OF-YEAR age
 
@@ -135,7 +133,7 @@ for period in range(total_periods):
         annual_contrib_for_year = 0.0
 
     # Deposit at start of period, then earn for the period
-    employer_amt = employee_contrib_per_period * float(employer_contrib_rate)
+    employer_amt  = employee_contrib_per_period * float(employer_contrib_rate)
     total_contrib = employee_contrib_per_period + employer_amt
     balance += total_contrib
     earnings = balance * rate_per_period
@@ -154,7 +152,7 @@ for period in range(total_periods):
             "Year": year_number,
             "AgeStart": int(age_start),               # e.g., 35 for Year 1
             "AgeEnd": int(age_end),                   # e.g., 36 for Year 1
-            "Age": int(age_start),                    # 🔑 display start-of-year age
+            "Age": int(age_start),                    # 🔑 display start-of-year age (Year 1 shows 35)
             "StartingSavings": float(current_savings),
             "YearlyContrib": annual_contrib_for_year, # this year's employee+employer sum
             "Contributions": cum_contrib,             # cumulative
@@ -162,8 +160,9 @@ for period in range(total_periods):
             "Total": balance                          # end-of-year balance
         })
 
-# Build DataFrame
+# Build DataFrame (for chart/callouts keep Year 0; for table/export hide it)
 df = pd.DataFrame(annual_data)
+df_table = df.loc[df["Year"] != 0].copy()  # 🔒 hide Year 0 from the table & file export
 
 # ── KPI Metrics ───────────────────────────────────────────────────────────────
 end_balance = float(df["Total"].iloc[-1]) if not df.empty else 0.0
@@ -180,7 +179,7 @@ fig, ax = plt.subplots(figsize=(10, 6))
 fig.patch.set_facecolor("#f7f7f7" if "Light" in theme else "#111418")
 ax.set_facecolor("#ffffff" if "Light" in theme else "#0c0f13")
 
-positions = np.arange(len(df))   # 0..N
+positions = np.arange(len(df))   # 0..N including Year 0
 bar_width = 0.85
 
 # Stacked bars: StartingSavings (flat band) + cumulative Contributions + cumulative Earnings
@@ -194,7 +193,7 @@ ax.bar(positions, df["Earnings"], bottom=df["StartingSavings"] + df["Contributio
 # 🔁 X-axis: numeric Year labels starting at 0
 ax.set_xticks(positions)
 ax.set_xticklabels(df["Year"].astype(int).astype(str), rotation=0)
-ax.set_xlabel("Year (0 = Day 0 baseline; then Year 1..N)")
+ax.set_xlabel("Year (0 = Day 0 baseline; then 1..N)")
 ax.set_ylabel("Amount ($)")
 ax.set_title("Future Value Calculation", fontsize=11)
 ax.yaxis.set_major_formatter(mtick.StrMethodFormatter('${x:,.0f}'))
@@ -262,42 +261,32 @@ def add_callouts_vertical(points):
         need_top = max([ymax] + desired_tops)
         if need_top > ymax:
             ax.set_ylim(top=need_top)
-
-    # Recompute with final limits
-    _, ymax = ax.get_ylim()
-    min_above_abs = min_above_frac * ymax
-    text_gap_abs = text_gap_frac * ymax
+            _, ymax = ax.get_ylim()
+            min_above_abs = min_above_frac * ymax
+            text_gap_abs = text_gap_frac * ymax
 
     for p in points:
         x, y_bar = float(p["x"]), float(p["y"])
         y_line_top = y_bar + max(0.18 * ymax, (ymax - y_bar) * height_factor)
 
-        # Draw vertical leader; label box ABOVE the line top (so it doesn't sit on the line)
-        ax.annotate(
-            "", xy=(x, y_bar), xytext=(x, y_line_top),
-            arrowprops=dict(arrowstyle="->", lw=1.2, color=line_color),
-            zorder=5
-        )
+        # Draw vertical leader; label box ABOVE the line top
+        ax.annotate("", xy=(x, y_bar), xytext=(x, y_line_top),
+                    arrowprops=dict(arrowstyle="->", lw=1.2, color=line_color), zorder=5)
 
         y_text = max(y_bar + min_above_abs, y_line_top + text_gap_abs)
-        ax.text(
-            x, y_text, p["label"],
-            ha="center", va="bottom", fontsize=9,
-            bbox=dict(boxstyle="round,pad=0.25", fc=box_fc, ec=box_ec),
-            zorder=6
-        )
+        ax.text(x, y_text, p["label"], ha="center", va="bottom", fontsize=9,
+                bbox=dict(boxstyle="round,pad=0.25", fc=box_fc, ec=box_ec), zorder=6)
 
 # ── Callouts (per spec) ──────────────────────────────────────────────────────
 callouts = []
-# Year 1 callout: "Initial Year", Contribution amount, and Total
+# Year 1 callout: "Initial Year", Contribution amount (employee+employer for Year 1), and Total
 y1, idx1 = total_and_index_for_yearnum(1)
 if show_callouts and (y1 is not None):
-    # Use the recorded Year 1 per-year contribution from the table to reflect employee+employer for that year
     year1_contrib = float(df.loc[df["Year"] == 1, "YearlyContrib"].iloc[0])
     callouts.append({
         "x": idx1,
         "y": y1,
-        "label": f"Initial Year\nContribution: ${year1_contrib:,.0f}\nTotal: ${y1:,.0f}"
+        "label": f"Initial Year (Age {int(init_age)})\nContribution: ${year1_contrib:,.0f}\nTotal: ${y1:,.0f}"
     })
 
 # Second schedule callout (first year it applies)
@@ -308,7 +297,7 @@ if show_callouts and use_second and int(second_age) >= int(init_age):
         callouts.append({
             "x": idx2,
             "y": ys,
-            "label": f"Second schedule (Year {second_year_num})\nTotal: ${ys:,.0f}"
+            "label": f"Second schedule (Age {int(second_age)})\nTotal: ${ys:,.0f}"
         })
 
 # Retirement callout (end of retirement year)
@@ -317,7 +306,7 @@ if show_callouts and (ylast is not None):
     callouts.append({
         "x": idx_last,
         "y": ylast,
-        "label": f"Retirement (Year {int(years)})\nTotal: ${ylast:,.0f}"
+        "label": f"Retirement (Age {int(ret_age)})\nTotal: ${ylast:,.0f}"
     })
 
 if show_callouts:
@@ -338,12 +327,13 @@ st.download_button(
     key="download-chart-png",
 )
 
-# ── Export Table ──────────────────────────────────────────────────────────────
+# ── Export Table (Year 0 EXCLUDED) ────────────────────────────────────────────
 try:
     import openpyxl  # noqa: F401
     xlsx_buf = io.BytesIO()
     with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Projection")
+        # Export table WITHOUT Year 0 per your requirement
+        df_table.to_excel(writer, index=False, sheet_name="Projection")
     xlsx_buf.seek(0)
     st.download_button(
         "📄 Export Table (Excel)",
@@ -353,7 +343,7 @@ try:
         key="download-table-xlsx",
     )
 except Exception:
-    csv_data = df.to_csv(index=False).encode("utf-8-sig")
+    csv_data = df_table.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
         "📄 Export Table (CSV)",
         data=csv_data,
@@ -362,14 +352,9 @@ except Exception:
         key="download-table-csv",
     )
 
-# ── Data Table (restored) ─────────────────────────────────────────────────────
-# Age shows START-OF-YEAR age for Year >= 1; Year 0 blank to avoid duplication
+# ── Data Table (Year 0 EXCLUDED) ─────────────────────────────────────────────
 view_cols = [
     "Year", "Age", "AgeStart", "AgeEnd",
     "StartingSavings", "YearlyContrib", "Contributions", "Earnings", "Total"
 ]
-# Ensure all columns exist even if df is empty (defensive)
-for c in view_cols:
-    if c not in df.columns:
-        df[c] = []  # create empty columns to avoid st.dataframe errors
-st.dataframe(df[view_cols].round(2), use_container_width=True)
+st.dataframe(df_table[view_cols].round(2), use_container_width=True)
