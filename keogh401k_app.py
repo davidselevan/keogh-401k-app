@@ -105,11 +105,11 @@ annual_contrib_for_year = 0.0
 employee_contrib_per_period = 0.0
 employer_rate_effective = float(employer_contrib_rate)
 
-# ✅ Add an explicit Year 0 row so we can label it and visualize the baseline
+# ✅ Add Year 0 baseline row once; leave Age blank to avoid "Age 35" duplication in table.
 annual_data.append({
     "Year": 0,
-    "Age": int(init_age),          # show start age for Year 0
-    "AgeEnd": int(init_age),       # same as start (no accrual yet)
+    "Age": "",                    # blank to avoid duplicate "35" (Year 1 will show 35)
+    "AgeEnd": int(init_age),      # end age not used for Year 0; kept for completeness
     "StartingSavings": float(current_savings),
     "YearlyContrib": 0.0,
     "Contributions": 0.0,
@@ -124,7 +124,7 @@ for period in range(total_periods):
     is_year_start = (pos_in_year == 0)
     is_year_end = (pos_in_year == periods_per_year - 1)
 
-    # Age at the start of this plan year (✅ we'll display this as the "Age" for that year)
+    # Age at the start of this plan year (this will display for that Year row)
     age_start = int(init_age) + year_idx
 
     # Set this year's contribution schedule at the START of the year
@@ -157,7 +157,7 @@ for period in range(total_periods):
         age_end = age_start + 1                    # end-of-year integer age
         annual_data.append({
             "Year": year_number,
-            "Age": int(age_start),                 # ✅ show start-of-year age (e.g., 35 for Year 1)
+            "Age": int(age_start),                 # show start-of-year age (e.g., 35 for Year 1)
             "AgeEnd": int(age_end),
             "StartingSavings": float(current_savings),   # for stacked baseline band
             "YearlyContrib": annual_contrib_for_year,    # contributions for THIS year
@@ -187,7 +187,7 @@ ax.set_facecolor("#ffffff" if "Light" in theme else "#0c0f13")
 # Stacked bars with a flat "StartingSavings" baseline band so top == Total
 years_x = df["Year"]
 bottoms = np.zeros(len(df))
-if current_savings > 0:
+if current_savings >= 0:  # always draw band (can be zero), keeps top == Total
     ax.bar(years_x, df["StartingSavings"], color=starting_color, edgecolor="none",
            label="Starting Savings", zorder=1)
     bottoms = df["StartingSavings"].values
@@ -218,8 +218,6 @@ def add_callouts_no_overlap(points, left_right_offsets=(-0.9, 0.9), y_gap_frac=0
     """
     Stagger annotation boxes vertically to avoid overlap.
     points: list of dicts with keys {x, y, label}
-    left_right_offsets: tuple of x offsets alternated across points
-    y_gap_frac: minimum vertical gap between boxes as a fraction of current ymax
     """
     if not points:
         return
@@ -255,19 +253,19 @@ def y_total_at_year(year_num: int):
 
 callouts = []
 
-# 1) Starting Savings (Year 0)
-if current_savings > 0:
-    y0 = y_total_at_year(0)
-    if y0 is not None:
-        callouts.append({
-            "x": 0,
-            "y": y0,
-            "label": f"Starting Savings\nYear 0 | Age: {int(init_age)}\nTotal: ${y0:,.0f}"
-        })
+# 1) Starting Savings (Year 0) — ALWAYS include (even if $0)
+y0 = y_total_at_year(0)
+if y0 is not None:
+    callouts.append({
+        "x": 0,
+        "y": y0,
+        "label": f"Starting Savings\nYear 0 | Age: {int(init_age)}\nTotal: ${y0:,.0f}"
+    })
 
 # 2) Second contribution start (at beginning of 'second_age' year)
 if use_second and int(second_age) >= int(init_age):
-    second_year_num = int(second_age) - int(init_age) + 1  # Year numbering (1-based)
+    # Year index is 1-based with Year 1 at init_age's first contribution year
+    second_year_num = int(second_age) - int(init_age) + 1
     ys = y_total_at_year(second_year_num)
     if ys is not None:
         callouts.append({
@@ -280,7 +278,6 @@ if use_second and int(second_age) >= int(init_age):
 last_year_num = int(years)
 yr = y_total_at_year(last_year_num)
 if yr is not None:
-    # Age at start of last year is ret_age - 1
     callouts.append({
         "x": last_year_num,
         "y": yr,
@@ -329,12 +326,11 @@ except Exception:
     )
 
 # ── Data Table ────────────────────────────────────────────────────────────────
-# Show "Age" as the start-of-year age so Year 1 matches the entered Initial Start Age
+# Show Age as start-of-year age for Year >= 1; Year 0 age left blank intentionally
 view_cols = [
     "Year",
-    "Age",          # start-of-year age (e.g., 35 for Year 1 if Initial Start Age = 35)
-    # "AgeEnd",     # uncomment to expose end-of-year age too
-] + (["StartingSavings"] if current_savings > 0 else []) + [
+    "Age",          # start-of-year age for Year >= 1; blank for Year 0 to avoid duplicate "35"
+] + (["StartingSavings"] if current_savings >= 0 else []) + [
     "YearlyContrib", "Contributions", "Earnings", "Total"
 ]
 st.dataframe(df[view_cols].round(2), use_container_width=True)
