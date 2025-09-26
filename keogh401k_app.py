@@ -251,39 +251,34 @@ def y_total_at_year(year_num: int):
 # ── Callouts: horizontal line above label, arrow down to bar top ─────────────
 def add_callouts_with_line(points):
     """
-    Draws a horizontal leader line above each bar top, places the label just
-    BELOW that line (so labels stay lower) but still ABOVE the bar/cross,
-    and draws an arrow DOWN from the line to the bar top. Expands y-limits
-    if needed so lines/labels always fit.
+    Draws a horizontal leader line above each bar top and places the label
+    BELOW that line (so labels stay lower). No arrow or cross marker.
+    Expands y-limits if needed so lines/labels always fit.
     """
     if not points:
         return
 
-    # Fallbacks if UI controls aren't defined
     hf = float(globals().get("callout_height_factor", 0.50))       # 0..1 between bar top and axis top
-    halfw = float(globals().get("callout_line_halfwidth", 0.35))   # horizontal line half-width in x units
-    gap_frac = float(globals().get("callout_text_gap", 0.03))      # label gap as fraction of axis height
-    min_above_frac = 0.02                                          # minimum gap above bar top/cross
+    halfw = float(globals().get("callout_line_halfwidth", 0.35))   # horizontal line half-width
+    gap_frac = float(globals().get("callout_text_gap", 0.03))      # gap between line and label
+    min_above_frac = 0.02                                          # minimum gap above bar top
 
-    # Colors by theme
     light_mode = ("Light" in theme) if isinstance(theme, str) else True
     box_fc = "#ffffff" if light_mode else "#1b1f24"
     box_ec = "#cfcfcf" if light_mode else "#333333"
     line_color = "#333333"
 
-    # Ensure enough vertical room for the highest line
     ymin, ymax = ax.get_ylim()
     desired_tops = []
     for p in points:
         y_bar = float(p["y"])
         y_line = y_bar + (ymax - y_bar) * hf
-        desired_tops.append(y_line * 1.06)  # small headroom above line
+        desired_tops.append(y_line * 1.06)
     if desired_tops:
         needed_top = max(ymax, max(desired_tops))
         if needed_top > ymax:
             ax.set_ylim(top=needed_top)
 
-    # Recompute with final limits
     ymin, ymax = ax.get_ylim()
     text_gap_abs = gap_frac * ymax
     min_above_abs = min_above_frac * ymax
@@ -291,24 +286,13 @@ def add_callouts_with_line(points):
     for p in points:
         x = float(p["x"])
         y_bar = float(p["y"])
-
-        # Line at a fraction toward the top
         y_line = y_bar + (ymax - y_bar) * hf
 
         # Horizontal leader line
         ax.plot([x - halfw, x + halfw], [y_line, y_line],
                 color=line_color, lw=1.2, zorder=9)
 
-        # Arrow from the line down to the bar/cross
-        ax.annotate(
-            "",
-            xy=(x, y_bar),
-            xytext=(x, y_line),
-            arrowprops=dict(arrowstyle="->", lw=1.2, color=line_color),
-            zorder=9
-        )
-
-        # Label BELOW the line but ABOVE the bar/cross (guaranteed)
+        # Label BELOW the line but ABOVE the bar
         y_text = max(y_bar + min_above_abs, y_line - text_gap_abs)
         ax.text(
             x, y_text, p["label"],
@@ -316,6 +300,7 @@ def add_callouts_with_line(points):
             bbox=dict(boxstyle="round,pad=0.25", fc=box_fc, ec=box_ec),
             zorder=10
         )
+
 
 # Build callouts using AGE + AMOUNT (no 'Year 16')
 callouts = []
