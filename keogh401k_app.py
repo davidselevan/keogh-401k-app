@@ -45,9 +45,9 @@ show_callouts = st.sidebar.checkbox("Show milestone callouts (labels)", value=Tr
 # ── 401(k) inputs ────────────────────────────────────────────────────────────
 st.sidebar.subheader("401(k) Inputs")
 
-# Optional current savings (added at Year 0, i.e., before Year 1 begins)
+# Optional current savings (added at day 0 BEFORE first paycheck; Year 1 will include its growth but no 'Year 0' row)
 current_savings = st.sidebar.number_input(
-    "Current Savings (Year 0)",
+    "Current Savings (Starting balance at day 0)",
     min_value=0.0, max_value=10_000_000.0, value=0.0, step=1_000.0
 )
 
@@ -55,18 +55,24 @@ current_savings = st.sidebar.number_input(
 # contrib_mode = st.sidebar.radio("Contribution Mode", ["Fixed Dollar Amount", "Percent of Salary"], index=0)
 contrib_mode = "Fixed Dollar Amount"
 
-# Group inputs into two "boxes" in the sidebar as requested
-with st.sidebar.expander("Initial Contribution Schedule", expanded=True):
+# ▶▶ EXACT TWO-INPUT BOXES as requested
+box1 = st.sidebar.container(border=True)
+with box1:
+    st.markdown("**Initial Contribution Schedule**")
     init_age = st.number_input("Initial Start Age", 18, 80, 35, 1)
-    init_contrib = st.number_input("Initial contribution amount (annual)", 1000, 1_000_000, 50_000, 1_000)
+    init_contrib = st.number_input("Initial contribution amount", 1000, 1_000_000, 50_000, 1_000)
 
-with st.sidebar.expander("Second Contribution Schedule", expanded=True):
-    use_second = st.checkbox("Use second contribution schedule", value=True)
+box2 = st.sidebar.container(border=True)
+with box2:
+    st.markdown("**Second Contribution Schedule**")
     second_age_default = max(50, int(init_age))
     second_age = st.number_input("Second Start Age", int(init_age), 80, second_age_default, 1)
-    second_contrib = st.number_input("Second contribution amount (annual)", 1000, 1_000_000, 55_000, 1_000)
+    second_contrib = st.number_input("Second contribution amount", 1000, 1_000_000, 55_000, 1_000)
 
-# Percent-of-salary inputs — ENTIRELY COMMENTED OUT (kept, not active)
+# Keep the toggle outside the boxes to avoid mixing fields inside each box
+use_second = st.sidebar.checkbox("Use second contribution schedule", value=True)
+
+# Percent-of-salary inputs — ENTIRELY COMMENTED OUT
 # if contrib_mode == "Percent of Salary":
 #     base_salary = st.sidebar.number_input("Current Salary", 10_000.0, 1_000_000.0, 120_000.0, 1_000.0)
 #     init_percent = st.sidebar.slider("Employee Contribution % (initial)", 0.0, 100.0, 10.0, 0.5)
@@ -96,31 +102,19 @@ if use_second and second_age < init_age:
     st.stop()
 
 # ── Projection calculation ────────────────────────────────────────────────────
-# Year 1 starts with the first paycheck and continues through end of the initial start year.
-years = int(ret_age - init_age)              # number of full plan years (Year 1..years)
+# ◀◀ IMPORTANT: Year 1 starts at day 0-365. There is NO Year 0 row.
+years = int(ret_age - init_age)              # Year = 1..years
 total_periods = years * periods_per_year
 
-balance = float(current_savings)             # starting at Year 0 (before Year 1 contributions)
+balance = float(current_savings)             # starting balance at day 0
 cum_contrib = 0.0
 cum_earnings = 0.0
 
-annual_data = []                             # rows captured at END of each plan year
+annual_data = []                             # capture END of each plan year
 annual_contrib_for_year = 0.0
 
 employee_contrib_per_period = 0.0
 employer_rate_effective = float(employer_contrib_rate)
-
-# ✅ Add Year 0 baseline row once; leave Age blank to avoid "Age 35" duplication in table.
-annual_data.append({
-    "Year": 0,
-    "Age": "",                    # blank to avoid duplicate "35" (Year 1 will show 35)
-    "AgeEnd": int(init_age),      # end age not used for Year 0; kept for completeness
-    "StartingSavings": float(current_savings),
-    "YearlyContrib": 0.0,
-    "Contributions": 0.0,
-    "Earnings": 0.0,
-    "Total": balance
-})
 
 for period in range(total_periods):
     # period runs 0..total_periods-1
@@ -146,7 +140,7 @@ for period in range(total_periods):
     employer_amt = employee_contrib_per_period * employer_rate_effective
     total_contrib = employee_contrib_per_period + employer_amt
 
-    # ✅ Deposit at the START of the period (day 1), then earn for the period
+    # Deposit at the START of the period (day 0), then earn for the period
     balance += total_contrib
     earnings = balance * rate_per_period
     balance += earnings
@@ -158,20 +152,20 @@ for period in range(total_periods):
 
     # Capture row at END of the year (so Year 1 has full-year totals)
     if is_year_end:
-        year_number = year_idx + 1                 # 1-based Year numbering
+        year_number = year_idx + 1                 # 1-based Year numbering (1..years)
         age_end = age_start + 1                    # end-of-year integer age
         annual_data.append({
             "Year": year_number,
-            "Age": int(age_start),                 # show start-of-year age (e.g., 35 for Year 1)
+            "Age": int(age_start),                 # start-of-year age (e.g., 35 for Year 1)
             "AgeEnd": int(age_end),
-            "StartingSavings": float(current_savings),   # for stacked baseline band
-            "YearlyContrib": annual_contrib_for_year,    # contributions for THIS year
-            "Contributions": cum_contrib,                # cumulative (incl. employer)
+            "StartingSavings": float(current_savings),   # flat baseline band to ensure top == Total
+            "YearlyContrib": annual_contrib_for_year,    # this year's contributions (incl. employer)
+            "Contributions": cum_contrib,                # cumulative contributions
             "Earnings": cum_earnings,                    # cumulative earnings
             "Total": balance                              # end-of-year balance
         })
 
-# Build DataFrame
+# Build DataFrame (no Year 0 row)
 df = pd.DataFrame(annual_data)
 
 # ── KPI Metrics ───────────────────────────────────────────────────────────────
@@ -192,7 +186,7 @@ ax.set_facecolor("#ffffff" if "Light" in theme else "#0c0f13")
 # Stacked bars with a flat "StartingSavings" baseline band so top == Total
 years_x = df["Year"]
 bottoms = np.zeros(len(df))
-if current_savings >= 0:  # always draw band (can be zero), keeps top == Total
+if current_savings >= 0:
     ax.bar(years_x, df["StartingSavings"], color=starting_color, edgecolor="none",
            label="Starting Savings", zorder=1)
     bottoms = df["StartingSavings"].values
@@ -202,43 +196,45 @@ ax.bar(years_x, df["Contributions"], bottom=bottoms, color=contrib_color, edgeco
 ax.bar(years_x, df["Earnings"], bottom=bottoms + df["Contributions"], color=earnings_color, edgecolor="none",
        label="Earnings", zorder=3)
 
-ax.set_xlabel("Year (0 = starting point, then Year 1..)")
+ax.set_xlabel("Year (1 = first plan year, spans day 0–365)")
 ax.set_ylabel("Amount ($)")
 ax.set_title("Future Value Calculation", fontsize=11)
-ax.legend(frameon=True)
+# Move legend outside to guarantee it never covers bars
+ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), frameon=True)
 ax.yaxis.set_major_formatter(mtick.StrMethodFormatter('${x:,.0f}'))
 ax.grid(axis='y', linestyle='--', alpha=0.6)
 
-# Headroom for annotations (keep labels above, not covering bars)
+# Extra headroom so annotations NEVER touch bars
 max_total = float(df["Total"].max()) if not df.empty else 1.0
-_, ymax = ax.get_ylim()
-top_with_headroom = max_total * 1.28
-if ymax < top_with_headroom:
-    ax.set_ylim(top=top_with_headroom)
+min_y, ymax = ax.get_ylim()
+target_top = max_total * 1.45  # generous headroom
+if ymax < target_top:
+    ax.set_ylim(top=target_top)
 
+plt.subplots_adjust(right=0.82)  # room for outside legend
 plt.tight_layout()
 
-# ── Non-overlapping milestone callouts ────────────────────────────────────────
-def add_callouts_no_overlap(points, left_right_offsets=(-0.9, 0.9), y_gap_frac=0.06):
+# ── Milestone callouts placed ABOVE bars (no overlap) ─────────────────────────
+def add_callouts_above(points, y_gap_frac=0.08):
     """
-    Stagger annotation boxes vertically to avoid overlap.
+    Place all annotations above the bar tops with vertical spacing to avoid overlap.
+    No label ever sits on a bar.
     points: list of dicts with keys {x, y, label}
     """
     if not points:
         return
     _ymin, _ymax = ax.get_ylim()
     gap = y_gap_frac * _ymax
-    pts = sorted(points, key=lambda p: p["y"])
-    last_yt = -np.inf
-    for i, p in enumerate(pts):
-        xoff = left_right_offsets[i % 2]
-        base_yt = p["y"] * 1.10 if p["y"] > 0 else gap
-        yt = max(base_yt, last_yt + gap)
-        yt = min(yt, ax.get_ylim()[1] * 0.98)
+    # Sort by x (timeline) but enforce increasing y_text
+    pts = sorted(points, key=lambda p: p["x"])
+    last_y_text = max_total * 1.02  # start a bit above the max bar top
+    for p in pts:
+        y_text = max(p["y"] + gap, last_y_text + gap)
+        y_text = min(y_text, _ymax * 0.98)  # stay within the top margin
         ax.annotate(
             p["label"],
             xy=(p["x"], p["y"]),
-            xytext=(p["x"] + xoff, yt),
+            xytext=(p["x"], y_text),
             textcoords="data",
             arrowprops=dict(facecolor="black", arrowstyle="->", lw=1),
             fontsize=9,
@@ -246,9 +242,10 @@ def add_callouts_no_overlap(points, left_right_offsets=(-0.9, 0.9), y_gap_frac=0
             va="center",
             bbox=dict(boxstyle="round,pad=0.3",
                       fc="#ffffff" if "Light" in theme else "#1b1f24",
-                      ec="#cfcfcf" if "Light" in theme else "#333333")
+                      ec="#cfcfcf" if "Light" in theme else "#333333"),
+            zorder=10
         )
-        last_yt = yt
+        last_y_text = y_text
 
 def y_total_at_year(year_num: int):
     row = df.loc[df["Year"] == int(year_num)]
@@ -258,19 +255,18 @@ def y_total_at_year(year_num: int):
 
 callouts = []
 
-# 1) Starting Savings (Year 0) — ALWAYS include (even if $0)
-y0 = y_total_at_year(0)
-if y0 is not None:
+# 1) Initial Start Year (Year 1)
+y1 = y_total_at_year(1)
+if y1 is not None:
     callouts.append({
-        "x": 0,
-        "y": y0,
-        "label": f"Starting Savings\nYear 0 | Age: {int(init_age)}\nTotal: ${y0:,.0f}"
+        "x": 1,
+        "y": y1,
+        "label": f"Initial Start Year\nYear 1 | Age: {int(init_age)}\nTotal: ${y1:,.0f}"
     })
 
 # 2) Second contribution start (at beginning of 'second_age' year)
 if use_second and int(second_age) >= int(init_age):
-    # Year index is 1-based with Year 1 at init_age's first contribution year
-    second_year_num = int(second_age) - int(init_age) + 1
+    second_year_num = int(second_age) - int(init_age) + 1  # with Year 1 at init_age
     ys = y_total_at_year(second_year_num)
     if ys is not None:
         callouts.append({
@@ -289,9 +285,9 @@ if yr is not None:
         "label": f"Retirement\nYear {last_year_num} | Age: {int(ret_age)}\nTotal: ${yr:,.0f}"
     })
 
-# 🔘 Honor the "Show milestone callouts" toggle
+# Honor the "Show milestone callouts" toggle
 if show_callouts:
-    add_callouts_no_overlap(callouts)
+    add_callouts_above(callouts)
 
 # ✅ Export Chart (PNG)
 png_buf = io.BytesIO()
@@ -333,10 +329,10 @@ except Exception:
     )
 
 # ── Data Table ────────────────────────────────────────────────────────────────
-# Show Age as start-of-year age for Year >= 1; Year 0 age left blank intentionally
+# Show Age as start-of-year age for Year >= 1.
 view_cols = [
     "Year",
-    "Age",          # start-of-year age for Year >= 1; blank for Year 0 to avoid duplicate "35"
+    "Age",
 ] + (["StartingSavings"] if current_savings >= 0 else []) + [
     "YearlyContrib", "Contributions", "Earnings", "Total"
 ]
